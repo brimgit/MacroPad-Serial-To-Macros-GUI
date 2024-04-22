@@ -1,14 +1,1 @@
-{
-    "1: Pressed": {
-        "type": "Modifier Key",
-        "action": "shift"
-    },
-    "2: Pressed": {
-        "type": "Modifier Key",
-        "action": "win"
-    },
-    "3: Pressed": {
-        "type": "Keyboard Key",
-        "action": "s"
-    }
-}
+{}

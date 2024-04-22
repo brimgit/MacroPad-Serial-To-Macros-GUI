@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (QMainWindow, QPushButton, QVBoxLayout, QWidget,
                              QLabel, QLineEdit, QTextEdit, QListWidget, QHBoxLayout,
                              QMessageBox, QDialog, QFormLayout, QDialogButtonBox, QComboBox)
 from PyQt5.QtCore import pyqtSignal, QObject
-import pyautogui
+import pyautogui, keyboard
 from src.macro_manager import set_macro, save_macros, reload_macros, delete_macro
 from src.serial_manager import SerialManager
 class GuiUpdater(QObject):
@@ -198,7 +198,18 @@ class MacroPadApp(QMainWindow):
             if action_type == "Keyboard Key":
                 pyautogui.press(macro_action)
             elif action_type == "Media Control":
-                pyautogui.press(macro_action)  # Assuming pyautogui can handle these directly
+                # keyboard can simulate media keys, ensure you run your script with appropriate privileges
+                if macro_action == "play/pause":
+                    keyboard.press_and_release('play/pause')
+                elif macro_action == "next track":
+                    keyboard.press_and_release('next track')
+                elif macro_action == "previous track":
+                    keyboard.press_and_release('previous track')
+                elif macro_action == "volume up":
+                    keyboard.press_and_release('volume up')
+                elif macro_action == "volume down":
+                    keyboard.press_and_release('volume down')
+                # Add more elif blocks for other media controls as needed.
             elif action_type == "Function Key":
                 pyautogui.press(macro_action)
             elif action_type == "Modifier Key":
