@@ -149,17 +149,22 @@ class MacroPadApp(QMainWindow):
     def handle_received_data(self, data):
         try:
             decoded_data = data.decode('utf-8').strip()
+            print(f"Received data: {decoded_data}")  # Debug print
             self.guiUpdater.updateTextSignal.emit(decoded_data)
             self.decodedVar = decoded_data
+            self.execute_macro(decoded_data)
         except UnicodeDecodeError:
-            QMessageBox.warning(self, "Decode Error", "Received non-UTF-8 data")
-
+            print("Received non-UTF-8 data")
+            
     def execute_macro(self, command):
+        print(f"Trying to execute macro for: {command}")  # Debug print
         macro_action = self.MacroPadApp.get(command)
         if macro_action:
+            print(f"Executing macro: {macro_action}")  # Debug print
             pyautogui.write(macro_action)
             self.statusLabel.setText(f"Executed macro for {command}")
         else:
+            print(f"No macro assigned for command: {command}")  # Debug print
             self.statusLabel.setText("No macro assigned for this command")
 
     def updateReceivedDataDisplay(self, text):
