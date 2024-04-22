@@ -1,14 +1,14 @@
 {
     "1: Pressed": {
-        "type": "Keyboard Key",
-        "action": "a"
+        "type": "Modifier Key",
+        "action": "shift"
     },
     "2: Pressed": {
-        "type": "Media Control",
-        "action": "play/pause"
+        "type": "Modifier Key",
+        "action": "win"
     },
-    "1: Held": {
-        "type": "Media Control",
-        "action": "next track"
+    "3: Pressed": {
+        "type": "Keyboard Key",
+        "action": "s"
     }
 }

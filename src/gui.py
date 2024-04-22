@@ -67,9 +67,6 @@ class MacroPadApp(QMainWindow):
         main_layout.addWidget(self.macroList)
 
         control_layout = QHBoxLayout()
-        self.macroInput = QLineEdit(self)
-        self.macroInput.setPlaceholderText("Enter a key or combo...")
-        control_layout.addWidget(self.macroInput)
 
         self.setMacroButton = QPushButton("Set/Edit Macro", self)
         self.setMacroButton.clicked.connect(self.set_or_edit_macro)
@@ -115,12 +112,14 @@ class MacroPadApp(QMainWindow):
     def set_or_edit_macro(self):
         command = self.decodedVar
         action_type = self.actionTypeSelect.currentText()
-        macro_action = self.actionSelect.currentText()
+        macro_action = self.actionSelect.currentText()  # Updated to get the action from the dropdown
+        if not macro_action:
+            QMessageBox.warning(self, "Invalid Macro", "Macro action cannot be empty.")
+            return
         set_macro(command, action_type, macro_action)
         self.refresh_macros()
         self.statusLabel.setText(f"Macro set for {command}: {action_type} - {macro_action}")
 
-        
     def refresh_macros(self):
         self.MacroPadApp = reload_macros()
         self.update_macro_list()
