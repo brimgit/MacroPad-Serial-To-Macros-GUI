@@ -10,12 +10,14 @@ class GuiUpdater(QObject):
     executeMacroSignal = pyqtSignal(str)
 
 class MacroPadApp(QMainWindow):
+    
     def __init__(self):
         super().__init__()
+        self.decodedVar = ""
         self.guiUpdater = GuiUpdater()
         self.guiUpdater.updateTextSignal.connect(self.updateReceivedDataDisplay)
         self.guiUpdater.executeMacroSignal.connect(self.execute_macro)
-        self.macros = reload_macros()
+        self.MacroPadApp = reload_macros()
         self.initUI()
 
     def initUI(self):
@@ -62,14 +64,14 @@ class MacroPadApp(QMainWindow):
         self.setCentralWidget(centralWidget)
         
     def set_or_edit_macro(self):
-        command = self.macroList.currentItem().text().split(":")[0].strip() if self.macroList.currentItem() else ""
+        command = self.decodedVar
         macro_action = self.macroInput.text()
         set_macro(command, macro_action)
         self.refresh_macros()
         self.statusLabel.setText(f"Macro set for {command}: {macro_action}")
 
     def refresh_macros(self):
-        self.macros = reload_macros()
+        self.MacroPadApp = reload_macros()
         self.update_macro_list()
         self.statusLabel.setText("Macros refreshed successfully.")
 
@@ -89,18 +91,19 @@ class MacroPadApp(QMainWindow):
 
     def update_macro_list(self):
         self.macroList.clear()
-        for command, action in self.macros.items():
+        for command, action in self.MacroPadApp.items():
             self.macroList.addItem(f"{command}: {action}")
 
     def handle_received_data(self, data):
         try:
             decoded_data = data.decode('utf-8').strip()
             self.guiUpdater.updateTextSignal.emit(decoded_data)
+            self.decodedVar = decoded_data
         except UnicodeDecodeError:
             print("Received non-UTF-8 data")
             
     def execute_macro(self, command):
-        macro_action = self.macros.get(command)
+        macro_action = self.MacroPadApp.get(command)
         if macro_action:
             pyautogui.write(macro_action)
             self.statusLabel.setText(f"Executed macro for {command}")

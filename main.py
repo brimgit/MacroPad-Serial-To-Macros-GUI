@@ -9,7 +9,6 @@ def main():
 
     serial_manager = SerialManager(ex.handle_received_data)
     serial_manager.start()
-
     ex.show()
     # Execute the app, capture the exit code, and ensure the process exits with it
     exit_code = app.exec_()
