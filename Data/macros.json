@@ -1,1 +1,14 @@
-{}
+{
+    "1: Pressed": {
+        "type": "Keyboard Key",
+        "action": "a"
+    },
+    "Enc1: +": {
+        "type": "Media Control",
+        "action": "volume up"
+    },
+    "Enc1: -": {
+        "type": "Media Control",
+        "action": "volume down"
+    }
+}

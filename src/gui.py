@@ -72,14 +72,6 @@ class MacroPadApp(QMainWindow):
         self.setMacroButton.clicked.connect(self.set_or_edit_macro)
         control_layout.addWidget(self.setMacroButton)
 
-        self.refreshMacrosButton = QPushButton("Refresh Macros", self)
-        self.refreshMacrosButton.clicked.connect(self.refresh_macros)
-        control_layout.addWidget(self.refreshMacrosButton)
-
-        self.saveMacrosButton = QPushButton("Save Macros", self)
-        self.saveMacrosButton.clicked.connect(self.save_macros)
-        control_layout.addWidget(self.saveMacrosButton)
-
         self.removeMacroButton = QPushButton("Remove Selected Macro", self)
         self.removeMacroButton.clicked.connect(self.remove_selected_macro)
         control_layout.addWidget(self.removeMacroButton)
@@ -112,13 +104,19 @@ class MacroPadApp(QMainWindow):
     def set_or_edit_macro(self):
         command = self.decodedVar
         action_type = self.actionTypeSelect.currentText()
-        macro_action = self.actionSelect.currentText()  # Updated to get the action from the dropdown
+        macro_action = self.actionSelect.currentText()
+        
         if not macro_action:
             QMessageBox.warning(self, "Invalid Macro", "Macro action cannot be empty.")
             return
+        
+        # Set macro, save macros, and refresh the list
         set_macro(command, action_type, macro_action)
-        self.refresh_macros()
+        save_macros()  # This will save the current state of the macros to the file
+        self.refresh_macros()  # Refresh the macro list to reflect the new changes
+        
         self.statusLabel.setText(f"Macro set for {command}: {action_type} - {macro_action}")
+
 
     def refresh_macros(self):
         self.MacroPadApp = reload_macros()
