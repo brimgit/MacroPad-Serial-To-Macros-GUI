@@ -1,33 +1,29 @@
-from PyQt5.QtWidgets import (QMainWindow, QPushButton, QVBoxLayout, QWidget,
-                             QLabel, QLineEdit, QTextEdit, QListWidget, QHBoxLayout,
-                             QMessageBox, QDialog, QFormLayout, QDialogButtonBox, QComboBox)
-from PyQt5.QtCore import pyqtSignal, QObject
+import sys
+from PyQt5.QtWidgets import (QMainWindow, QAction, QVBoxLayout, QWidget, QLabel,
+                             QTextEdit, QListWidget, QPushButton, QMessageBox, QDialog,
+                             QFormLayout, QDialogButtonBox, QComboBox, QDockWidget,
+                             QApplication, QLineEdit)
+from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtCore import pyqtSignal, QObject, Qt, QPropertyAnimation, QRect
 import pyautogui, keyboard
 from src.macro_manager import set_macro, save_macros, reload_macros, delete_macro
 from src.serial_manager import SerialManager
+
 class GuiUpdater(QObject):
     updateTextSignal = pyqtSignal(str)
     executeMacroSignal = pyqtSignal(str)
 
 class SettingsDialog(QDialog):
-    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Settings')
-
-        # Layout and form
         layout = QFormLayout(self)
-
-        # Serial port settings
         self.portInput = QLineEdit(self)
         self.portInput.setPlaceholderText('COM1')
         layout.addRow('Serial Port:', self.portInput)
-
         self.baudRateInput = QLineEdit(self)
         self.baudRateInput.setPlaceholderText('115200')
         layout.addRow('Baud Rate:', self.baudRateInput)
-
-        # Dialog buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -37,10 +33,8 @@ class SettingsDialog(QDialog):
         return self.portInput.text(), self.baudRateInput.text()
 
 class MacroPadApp(QMainWindow):
-    
     def __init__(self):
         super().__init__()
-        # Initialize SerialManager with a default port and baud rate
         self.serial_manager = SerialManager(self.handle_received_data, 'COM1', 115200)
         self.decodedVar = ""
         self.guiUpdater = GuiUpdater()
@@ -52,48 +46,88 @@ class MacroPadApp(QMainWindow):
     def initUI(self):
         self.setWindowTitle('MacroPad Serial Interface')
         self.setGeometry(100, 100, 800, 600)
-        main_layout = QVBoxLayout()
+        self.createSidebar()
 
-        self.statusLabel = QLabel("Ready", self)
+        main_layout = QVBoxLayout()
+        self.statusLabel = QLabel("Ready")
         main_layout.addWidget(self.statusLabel)
 
-        self.receivedDataDisplay = QTextEdit(self)
-        self.receivedDataDisplay.setPlaceholderText("Received data will be shown here...")
+        self.receivedDataDisplay = QTextEdit()
         self.receivedDataDisplay.setReadOnly(True)
         main_layout.addWidget(self.receivedDataDisplay)
 
-        self.macroList = QListWidget(self)
-        self.update_macro_list()
+        self.macroList = QListWidget()
         main_layout.addWidget(self.macroList)
 
-        control_layout = QHBoxLayout()
-
-        self.setMacroButton = QPushButton("Set/Edit Macro", self)
-        self.setMacroButton.clicked.connect(self.set_or_edit_macro)
-        control_layout.addWidget(self.setMacroButton)
-
-        self.removeMacroButton = QPushButton("Remove Selected Macro", self)
-        self.removeMacroButton.clicked.connect(self.remove_selected_macro)
-        control_layout.addWidget(self.removeMacroButton)
-
-        main_layout.addLayout(control_layout)
-        centralWidget = QWidget(self)
-        centralWidget.setLayout(main_layout)
-        self.setCentralWidget(centralWidget)
-        
-        self.settingsButton = QPushButton("Settings", self)
-        self.settingsButton.clicked.connect(self.open_settings)
-        control_layout.addWidget(self.settingsButton)
-
-        self.actionTypeSelect = QComboBox(self)
+        self.actionTypeSelect = QComboBox()
         self.actionTypeSelect.addItems(["Keyboard Key", "Media Control", "Function Key", "Modifier Key"])
         self.actionTypeSelect.currentIndexChanged.connect(self.updateActionOptions)
-        control_layout.addWidget(self.actionTypeSelect)
-        
-        self.actionSelect = QComboBox(self)
-        control_layout.addWidget(self.actionSelect)
-        self.updateActionOptions(0)  # Initialize the action options
+        main_layout.addWidget(self.actionTypeSelect)
 
+        self.actionSelect = QComboBox()
+        main_layout.addWidget(self.actionSelect)
+
+        self.setMacroButton = QPushButton("Set/Edit Macro")
+        self.setMacroButton.clicked.connect(self.set_or_edit_macro)
+        main_layout.addWidget(self.setMacroButton)
+
+        self.removeMacroButton = QPushButton("Remove Selected Macro")
+        self.removeMacroButton.clicked.connect(self.remove_selected_macro)
+        main_layout.addWidget(self.removeMacroButton)
+
+        centralWidget = QWidget()
+        centralWidget.setLayout(main_layout)
+        self.setCentralWidget(centralWidget)
+
+        self.load_stylesheet()
+
+    def createSidebar(self):
+        self.sidebar = QDockWidget("Sidebar", self)
+        self.sidebar.setAllowedAreas(Qt.LeftDockWidgetArea)
+        self.sidebar.setFeatures(QDockWidget.NoDockWidgetFeatures)
+        sidebar_contents = QWidget()
+        sidebar_layout = QVBoxLayout(sidebar_contents)
+        self.sidebar.setWidget(sidebar_contents)
+
+        logo_label = QLabel()
+        logo_pixmap = QPixmap('Assets/Images/logo.png')
+        logo_label.setPixmap(logo_pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        sidebar_layout.addWidget(logo_label)
+
+        settings_button = QPushButton('Settings')
+        settings_button.clicked.connect(self.open_settings)
+        sidebar_layout.addWidget(settings_button)
+
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.sidebar)
+
+        # Create toggle button for the sidebar
+        self.toggleButton = QPushButton(">", self)
+        self.toggleButton.clicked.connect(self.toggleSidebar)
+        self.toggleButton.setFixedSize(20, 80)
+        self.toggleButton.move(0, 200)
+
+    def toggleSidebar(self):
+        width = self.sidebar.width()
+        if self.sidebar.isVisible():
+            self.sidebar_animation = QPropertyAnimation(self.sidebar, b"maximumWidth")
+            self.sidebar_animation.setDuration(300)
+            self.sidebar_animation.setStartValue(width)
+            self.sidebar_animation.setEndValue(0)
+            self.sidebar_animation.start()
+            self.toggleButton.setText(">")
+        else:
+            self.sidebar.show()
+            self.sidebar_animation = QPropertyAnimation(self.sidebar, b"maximumWidth")
+            self.sidebar_animation.setDuration(300)
+            self.sidebar_animation.setStartValue(0)
+            self.sidebar_animation.setEndValue(200)
+            self.sidebar_animation.start()
+            self.toggleButton.setText("<")
+
+    def load_stylesheet(self):
+        with open('Data/style.css', 'r') as f:
+            self.setStyleSheet(f.read())
+            
     def open_settings(self):
         dialog = SettingsDialog(self)
         if dialog.exec_():

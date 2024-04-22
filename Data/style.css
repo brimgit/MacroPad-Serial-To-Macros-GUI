@@ -1,0 +1,33 @@
+QToolBar {
+    background-color: #333;
+    border: none;
+    spacing: 10px;
+}
+
+QToolBar::item {
+    border: none;
+}
+
+QToolBar::item:hover {
+    background-color: #555;
+}
+
+QPushButton {
+    background-color: #5C6BC0;
+    color: white;
+    border-radius: 5px;
+    padding: 10px;
+}
+
+QPushButton:hover {
+    background-color: #3C5A99;
+}
+
+QPushButton:pressed {
+    background-color: #2C3E50;
+}
+QDockWidget {
+    border: 0px;
+    background: #333;
+}
+
