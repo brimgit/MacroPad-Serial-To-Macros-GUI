@@ -1,9 +1,8 @@
 from PyQt5.QtWidgets import (QMainWindow, QPushButton, QVBoxLayout, QWidget,
                              QLabel, QLineEdit, QTextEdit, QListWidget, QHBoxLayout,
-                             QMessageBox, QDialog, QFormLayout, QDialogButtonBox)
+                             QMessageBox, QDialog, QFormLayout, QDialogButtonBox, QComboBox)
 from PyQt5.QtCore import pyqtSignal, QObject
 import pyautogui
-import logging
 from src.macro_manager import set_macro, save_macros, reload_macros, delete_macro
 from src.serial_manager import SerialManager
 class GuiUpdater(QObject):
@@ -96,7 +95,16 @@ class MacroPadApp(QMainWindow):
         self.settingsButton = QPushButton("Settings", self)
         self.settingsButton.clicked.connect(self.open_settings)
         control_layout.addWidget(self.settingsButton)
-    
+
+        self.actionTypeSelect = QComboBox(self)
+        self.actionTypeSelect.addItems(["Keyboard Key", "Media Control", "Function Key", "Modifier Key"])
+        self.actionTypeSelect.currentIndexChanged.connect(self.updateActionOptions)
+        control_layout.addWidget(self.actionTypeSelect)
+        
+        self.actionSelect = QComboBox(self)
+        control_layout.addWidget(self.actionSelect)
+        self.updateActionOptions(0)  # Initialize the action options
+
     def open_settings(self):
         dialog = SettingsDialog(self)
         if dialog.exec_():
@@ -106,14 +114,13 @@ class MacroPadApp(QMainWindow):
                
     def set_or_edit_macro(self):
         command = self.decodedVar
-        macro_action = self.macroInput.text()
-        if not macro_action:
-            QMessageBox.warning(self, "Invalid Macro", "Macro action cannot be empty.")
-            return
-        set_macro(command, macro_action)
+        action_type = self.actionTypeSelect.currentText()
+        macro_action = self.actionSelect.currentText()
+        set_macro(command, action_type, macro_action)
         self.refresh_macros()
-        self.statusLabel.setText(f"Macro set for {command}: {macro_action}")
+        self.statusLabel.setText(f"Macro set for {command}: {action_type} - {macro_action}")
 
+        
     def refresh_macros(self):
         self.MacroPadApp = reload_macros()
         self.update_macro_list()
@@ -126,25 +133,53 @@ class MacroPadApp(QMainWindow):
     def remove_selected_macro(self):
         item = self.macroList.currentItem()
         if item:
-            # Here we need to handle the text properly to capture everything before the action
-            # Assuming the format is "command: action"
-            command_text = item.text()
-            command = command_text[:command_text.rfind(':')].strip()  # This strips after the last colon
+            full_text = item.text()
+            # It's important to extract the full key exactly as it's stored in the macros dictionary.
+            # Assuming your list items are in the format "1: Pressed: Media Control - play/pause",
+            # you would split by ':' and take the first two parts to reconstruct "1: Pressed".
+            command_key = ':'.join(full_text.split(':')[:2]).strip()
+
             try:
-                delete_macro(command)
-                self.refresh_macros()
-                self.statusLabel.setText(f"Removed macro for {command}")
+                if command_key in self.MacroPadApp:
+                    delete_macro(command_key)
+                    self.refresh_macros()
+                    self.statusLabel.setText(f"Removed macro for {command_key}")
+                else:
+                    QMessageBox.warning(self, "Error", f"No macro found for command '{command_key}'")
             except KeyError as e:
                 QMessageBox.warning(self, "Deletion Error", str(e))
-            except Exception as e:
-                QMessageBox.critical(self, "Deletion Error", "Failed to delete macro: " + str(e))
         else:
             QMessageBox.warning(self, "Select Macro", "Please select a macro to remove.")
-            
+
+    def updateActionOptions(self, index):
+        self.actionSelect.clear()
+
+        if index == 0:  # Keyboard Key
+            # List more common keys if needed
+            keyboard_keys = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 
+                            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                            'enter', 'esc', 'backspace', 'tab', 'space', 'minus', 
+                            'equal', 'leftbrace', 'rightbrace', 'semicolon', 'quote', 
+                            'tilde', 'comma', 'period', 'slash', 'backslash']
+            self.actionSelect.addItems(keyboard_keys)
+        elif index == 1:  # Media Control
+            self.actionSelect.addItems(['play/pause', 'next track', 'previous track', 'volume up', 'volume down'])
+        elif index == 2:  # Function Key
+            function_keys = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12']
+            self.actionSelect.addItems(function_keys)
+        elif index == 3:  # Modifier Key
+            self.actionSelect.addItems(['alt', 'ctrl', 'shift', 'win'])
+
+
+                    
     def update_macro_list(self):
         self.macroList.clear()
-        for command, action in self.MacroPadApp.items():
-            self.macroList.addItem(f"{command}: {action}")  # Ensure consistent formatting
+        for command, details in self.MacroPadApp.items():
+            list_item = f"{command}: {details['type']} - {details['action']}"
+            self.macroList.addItem(list_item)
+
+
 
     def handle_received_data(self, data):
         try:
@@ -157,15 +192,23 @@ class MacroPadApp(QMainWindow):
             print("Received non-UTF-8 data")
             
     def execute_macro(self, command):
-        print(f"Trying to execute macro for: {command}")  # Debug print
-        macro_action = self.MacroPadApp.get(command)
-        if macro_action:
-            print(f"Executing macro: {macro_action}")  # Debug print
-            pyautogui.write(macro_action)
-            self.statusLabel.setText(f"Executed macro for {command}")
+        macro = self.MacroPadApp.get(command)
+        if macro:
+            action_type = macro["type"]
+            macro_action = macro["action"]
+            if action_type == "Keyboard Key":
+                pyautogui.press(macro_action)
+            elif action_type == "Media Control":
+                pyautogui.press(macro_action)  # Assuming pyautogui can handle these directly
+            elif action_type == "Function Key":
+                pyautogui.press(macro_action)
+            elif action_type == "Modifier Key":
+                pyautogui.keyDown(macro_action)
+                pyautogui.keyUp(macro_action)
+            self.statusLabel.setText(f"Executed {action_type} macro for {command}: {macro_action}")
         else:
-            print(f"No macro assigned for command: {command}")  # Debug print
             self.statusLabel.setText("No macro assigned for this command")
+
 
     def updateReceivedDataDisplay(self, text):
         self.receivedDataDisplay.append(text)

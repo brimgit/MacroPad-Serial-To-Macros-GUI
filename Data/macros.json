@@ -1,1 +1,14 @@
-{}
+{
+    "1: Pressed": {
+        "type": "Keyboard Key",
+        "action": "a"
+    },
+    "2: Pressed": {
+        "type": "Media Control",
+        "action": "play/pause"
+    },
+    "1: Held": {
+        "type": "Media Control",
+        "action": "next track"
+    }
+}
