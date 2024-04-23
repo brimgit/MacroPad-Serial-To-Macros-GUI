@@ -1,33 +1,26 @@
-QToolBar {
-    background-color: #333;
-    border: none;
-    spacing: 10px;
-}
-
-QToolBar::item {
-    border: none;
-}
-
-QToolBar::item:hover {
-    background-color: #555;
-}
-
 QPushButton {
-    background-color: #5C6BC0;
+    background-color: #5cc069;
     color: white;
     border-radius: 5px;
-    padding: 10px;
+    padding: 10px; /* Ensures uniform padding */
 }
 
 QPushButton:hover {
-    background-color: #3C5A99;
+    background-color: #00f0a8;
 }
 
 QPushButton:pressed {
-    background-color: #2C3E50;
-}
-QDockWidget {
-    border: 0px;
-    background: #333;
+    background-color: #009113;
 }
 
+QDockWidget {
+    border: 0px;
+}
+
+QDockWidget::title {
+    background-color: transparent;
+    text-align: center;
+    height: 0px;
+    padding: 0px;
+    margin: 0px;
+}

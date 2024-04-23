@@ -1,14 +1,38 @@
 {
     "1: Pressed": {
-        "type": "Keyboard Key",
-        "action": "a"
+        "type": "Media Control",
+        "action": "play/pause"
     },
     "Enc1: +": {
         "type": "Media Control",
-        "action": "volume up"
+        "action": "volume_up"
     },
     "Enc1: -": {
         "type": "Media Control",
-        "action": "volume down"
+        "action": "volume_down"
+    },
+    "A: Pressed": {
+        "type": "Media Control",
+        "action": "volume_mute"
+    },
+    "2: Pressed": {
+        "type": "Keyboard Key",
+        "action": "0"
+    },
+    "3: Pressed": {
+        "type": "Function Key",
+        "action": "f4"
+    },
+    "4: Pressed": {
+        "type": "Modifier Key",
+        "action": "delete"
+    },
+    "5: Pressed": {
+        "type": "Media Control",
+        "action": "next_track"
+    },
+    "6: Pressed": {
+        "type": "Media Control",
+        "action": "previous_track"
     }
 }

@@ -1,18 +1,20 @@
 import json
 import os
 import logging
+import keyboard  # Import the keyboard library
 
-import pyautogui
-
-macros = {}
-
+# Configuration for logging
 logging.basicConfig(level=logging.INFO)
 
-def set_macro(command, action_type, action):
-    macros[command] = {"type": action_type, "action": action}
+macros = {}  # Dictionary to store macro configurations
 
-    
+def set_macro(command, action_type, action):
+    """ Store the macro configuration in a dictionary """
+    macros[command] = {"type": action_type, "action": action}
+    logging.info(f"Macro set for {command}: {action_type} - {action}")
+
 def save_macros():
+    """ Save the macros dictionary to a JSON file """
     file_path = os.path.join(os.path.dirname(__file__), '../Data/macros.json')
     try:
         with open(file_path, 'w') as f:
@@ -23,6 +25,7 @@ def save_macros():
         raise IOError("Failed to save macros due to an I/O error.")
 
 def reload_macros():
+    """ Load macros from a JSON file and update the macros dictionary """
     file_path = os.path.join(os.path.dirname(__file__), '../Data/macros.json')
     try:
         with open(file_path, 'r') as f:
@@ -38,6 +41,7 @@ def reload_macros():
         raise Exception("Failed to decode macros; JSON file is corrupted.")
     
 def delete_macro(command):
+    """ Delete a macro from the macros dictionary and save the changes """
     if command in macros:
         del macros[command]
         save_macros()
@@ -45,29 +49,18 @@ def delete_macro(command):
         logging.warning(f"Attempted to delete a non-existent macro: {command}")
         raise KeyError(f"No macro found for command '{command}'.")
 
-
-    
-def get_macro(command):
-    # Return the action associated with the command or None if it doesn't exist
-    return macros.get(command, None)
-
-def execute_macro(self, command):
-    macro = self.MacroPadApp.get(command)
+def execute_macro(command):
+    """ Execute the macro action based on the stored configuration """
+    macro = macros.get(command)
     if macro:
         if macro["type"] == "Keyboard Key":
-            pyautogui.press(macro["action"])
+            keyboard.send(macro["action"])  # keyboard.send combines press and release
         elif macro["type"] == "Media Control":
-            # Example for media control
-            if macro["action"] == "play/pause":
-                pyautogui.press('playpause')
-            elif macro["action"] == "volume up":
-                pyautogui.press('volumeup')
+            keyboard.send(macro["action"])  # Use send for media controls too
         elif macro["type"] == "Function Key":
-            pyautogui.press(macro["action"])
+            keyboard.send(macro["action"])  # Function keys treated similarly
         elif macro["type"] == "Modifier Key":
-            # For a single key press, like pressing and releasing Alt
-            pyautogui.keyDown(macro["action"])
-            pyautogui.keyUp(macro["action"])
-        self.statusLabel.setText(f"Executed {macro['type']} macro for {command}: {macro['action']}")
+            keyboard.press_and_release(macro["action"])  # Press and release for modifiers
+        logging.info(f"Executed {macro['type']} macro for {command}: {macro['action']}")
     else:
-        self.statusLabel.setText("No macro assigned for this command")
+        logging.warning("No macro assigned for this command")
