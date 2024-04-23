@@ -1,10 +1,1 @@
-{
-    "1: Pressed": {
-        "type": "Modifier Key",
-        "action": "pageup"
-    },
-    "2: Pressed": {
-        "type": "Media Control",
-        "action": "prev_track"
-    }
-}
+{}

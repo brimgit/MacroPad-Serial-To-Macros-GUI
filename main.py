@@ -6,7 +6,7 @@ from src.serial_manager import SerialManager
 def main():
     app = QApplication(sys.argv)
     ex = MacroPadApp()
-
+    
     serial_manager = SerialManager(ex.handle_received_data)
     serial_manager.start()
     ex.load_stylesheet()  # Make sure stylesheet is loaded here
