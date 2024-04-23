@@ -1,7 +1,7 @@
-MacroPad Serial GUI
+# MacroPad Serial GUI
 MacroPad Serial GUI is a Python application that provides a graphical interface for managing macros on a MacroPad device via serial communication. It allows users to set, edit, and remove macros conveniently.
 
-Features
+## Overview
 Set and edit macros easily.
 Manage macros through a user-friendly interface.
 Execute macros with a single click.
@@ -11,7 +11,7 @@ Download the latest release installer from the [Releases](https://github.com/Bri
 
 Alternatively, if you prefer to build the application from source, please refer to the [Development](https://github.com/Brimgit/MacroPad-Serial-GUI) section for instructions on setting up the development environment.
 
-Usage
+## Overview
 Launch the application after installation.
 Connect your MacroPad device via serial communication.
 Use the interface to set, edit, and remove macros as needed.
