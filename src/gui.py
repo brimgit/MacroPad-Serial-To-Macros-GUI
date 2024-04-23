@@ -1,4 +1,4 @@
-import sys
+import sys,logging, os
 from PyQt5.QtWidgets import (QMainWindow, QAction, QVBoxLayout, QWidget, QLabel,
                              QTextEdit, QListWidget, QPushButton, QMessageBox, QDialog,
                              QFormLayout, QDialogButtonBox, QComboBox, QDockWidget,
@@ -8,6 +8,26 @@ from PyQt5.QtCore import pyqtSignal, QObject, Qt, QPropertyAnimation, QRect
 import pyautogui, keyboard
 from src.macro_manager import set_macro, save_macros, reload_macros, delete_macro
 from src.serial_manager import SerialManager
+
+# Create 'logs' directory if it does not exist
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+# Set up logging to file
+logging.basicConfig(
+    level=logging.ERROR,  # Log error and above levels
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    filename='logs/logs.txt',  # Log file path
+    filemode='a'  # Append mode
+)
+
+# Optionally, set up logging to console for debugging
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.ERROR)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+logging.getLogger('').addHandler(console_handler)
 
 class GuiUpdater(QObject):
     updateTextSignal = pyqtSignal(str)
@@ -106,7 +126,7 @@ class MacroPadApp(QMainWindow):
         sidebar_layout.addWidget(settings_button)
 
         self.addDockWidget(Qt.LeftDockWidgetArea, self.sidebar)
-
+        
     def load_stylesheet(self):
         try:
             with open('Data/style.css', 'r') as f:
@@ -116,12 +136,26 @@ class MacroPadApp(QMainWindow):
         except Exception as e:
             print(f"Failed to load stylesheet: {e}")
             
+    def load_macros_and_update_list(self):
+        try:
+            self.MacroPadApp = reload_macros()
+            self.update_macro_list()
+            self.statusLabel.setText("Macros loaded and updated successfully.")
+        except Exception as e:
+            self.statusLabel.setText("Failed to load or update macros.")
+            print(f"Error loading macros: {e}")
+            
     def open_settings(self):
         dialog = SettingsDialog(self)
         if dialog.exec_():
-            port, baud_rate = dialog.getSettings()
-            self.serial_manager.update_settings(port, baud_rate)
-            self.statusLabel.setText(f"Serial port set to {port} at {baud_rate} baud")
+            try:
+                port, baud_rate = dialog.getSettings()
+                self.serial_manager.update_settings(port, baud_rate)
+                self.statusLabel.setText(f"Serial port set to {port} at {baud_rate} baud")
+            except Exception as e:
+                self.statusLabel.setText("Failed to update settings.")
+                print(f"Settings update error: {e}")
+
                
     def set_or_edit_macro(self):
         command = self.decodedVar
@@ -146,8 +180,12 @@ class MacroPadApp(QMainWindow):
         self.statusLabel.setText("Macros refreshed successfully.")
 
     def save_macros(self):
-        save_macros()
-        self.statusLabel.setText("Macros saved successfully.")
+        try:
+            save_macros()
+            self.statusLabel.setText("Macros saved successfully.")
+        except Exception as e:
+            self.statusLabel.setText("Failed to save macros.")
+            print(f"Error saving macros: {e}")
 
     def remove_selected_macro(self):
         item = self.macroList.currentItem()
@@ -229,24 +267,26 @@ class MacroPadApp(QMainWindow):
         if macro:
             action_type = macro["type"]
             macro_action = macro["action"]
-            
-            if action_type == "Keyboard Key":
-                keyboard.send(macro_action)  # Use send for simpler direct key press
-            elif action_type == "Media Control":
-                # Using keyboard for media controls. Make sure to handle exceptions if keys are not available
-                keyboard.send(macro_action)
-            elif action_type == "Function Key":
-                keyboard.send(macro_action)  # Function keys are handled similarly to normal keys
-            elif action_type == "Modifier Key":
-                # Modifier keys include both traditional modifiers and other keys categorized here for macros
-                # Handling individual key presses; consider adding functionality for combinations if needed
-                keyboard.send(macro_action)
+
+            try:
+                if action_type == "Keyboard Key":
+                    keyboard.send(macro_action)  # Use send for simpler direct key press
+                elif action_type == "Media Control":
+                    # Using keyboard for media controls. Make sure to handle exceptions if keys are not available
+                    keyboard.send(macro_action)
+                elif action_type == "Function Key":
+                    keyboard.send(macro_action)  # Function keys are handled similarly to normal keys
+                elif action_type == "Modifier Key":
+                    # Modifier keys include both traditional modifiers and other keys categorized here for macros
+                    # Handling individual key presses; consider adding functionality for combinations if needed
+                    keyboard.send(macro_action)
                 
-            self.statusLabel.setText(f"Executed {action_type} macro for {command}: {macro_action}")
+                self.statusLabel.setText(f"Executed {action_type} macro for {command}: {macro_action}")
+            except Exception as e:
+                self.statusLabel.setText(f"Failed to execute {action_type} macro: {str(e)}")
+                print(f"Error executing macro for {command}: {str(e)}")  # Optionally log to a file or logging system
         else:
             self.statusLabel.setText("No macro assigned for this command")
-
-
 
     def updateReceivedDataDisplay(self, text):
         self.receivedDataDisplay.append(text)
