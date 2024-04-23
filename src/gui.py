@@ -10,8 +10,9 @@ from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import pyqtSignal, QObject, Qt
 
 import keyboard
-from src.macro_manager import set_macro, save_macros, reload_macros, delete_macro
-from src.serial_manager import SerialManager
+from macro_manager import set_macro, save_macros, reload_macros, delete_macro
+from serial_manager import SerialManager
+from utils import resource_path
 
 # Check if the platform is Windows
 is_windows = sys.platform.startswith('win')
@@ -69,10 +70,10 @@ class MacroPadApp(QMainWindow):
         self.guiUpdater.updateTextSignal.connect(self.updateReceivedDataDisplay)
         self.guiUpdater.executeMacroSignal.connect(self.execute_macro)
         # Initialize system tray icon
-        self.tray_icon = QSystemTrayIcon(QIcon('Assets/Images/icon.png'), self)
+        self.tray_icon = QSystemTrayIcon(QIcon(resource_path('Assets/Images/icon.png')), self)
         self.tray_icon.activated.connect(self.toggle_window)
         self.create_tray_menu()
-        
+        self.setWindowIcon(QIcon(resource_path('Assets/Images/icon.ico')))
         self.initUI()
         self.load_macros_and_update_list()
         
@@ -130,7 +131,7 @@ class MacroPadApp(QMainWindow):
         self.sidebar.setMinimumWidth(300)  # Adjust this value as needed
 
         logo_label = QLabel()
-        logo_pixmap = QPixmap('Assets/Images/logo.png')
+        logo_pixmap = QPixmap(resource_path('Assets/Images/logo.png'))
         logo_label.setPixmap(logo_pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         sidebar_layout.addWidget(logo_label)
 
@@ -142,7 +143,7 @@ class MacroPadApp(QMainWindow):
 
     def load_stylesheet(self):
         try:
-            with open('Data/style.css', 'r') as f:
+            with open(resource_path('Data/style.css'), 'r') as f:
                 stylesheet = f.read()
                 self.setStyleSheet(stylesheet)
                 print("Stylesheet loaded successfully.")

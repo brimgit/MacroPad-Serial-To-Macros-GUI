@@ -2,6 +2,7 @@ import json
 import os
 import logging
 import keyboard  # Import the keyboard library
+from utils import resource_path, get_data_path
 
 # Configuration for logging
 logging.basicConfig(level=logging.INFO)
@@ -15,7 +16,7 @@ def set_macro(command, action_type, action):
 
 def save_macros():
     """ Save the macros dictionary to a JSON file """
-    file_path = os.path.join(os.path.dirname(__file__), '../Data/macros.json')
+    file_path = get_data_path('macros.json')  # Use get_data_path to ensure the correct writable directory
     try:
         with open(file_path, 'w') as f:
             json.dump(macros, f, indent=4)  # Use indent for better readability
@@ -23,10 +24,10 @@ def save_macros():
     except IOError as e:
         logging.error(f"Failed to save macros: {e}")
         raise IOError("Failed to save macros due to an I/O error.")
-
+    
 def reload_macros():
     """ Load macros from a JSON file and update the macros dictionary """
-    file_path = os.path.join(os.path.dirname(__file__), '../Data/macros.json')
+    file_path = get_data_path('macros.json')  # Use get_data_path to ensure the correct path
     try:
         with open(file_path, 'r') as f:
             loaded_macros = json.load(f)
