@@ -1,1 +1,6 @@
-{}
+{
+    "Enc1: +": {
+        "type": "Media Control",
+        "action": "volume_up"
+    }
+}

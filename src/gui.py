@@ -60,6 +60,7 @@ class SettingsDialog(QDialog):
         return self.portInput.text(), self.baudRateInput.text()
 
 class MacroPadApp(QMainWindow):
+
     def __init__(self):
         super().__init__()
         self.serial_manager = SerialManager(self.handle_received_data, 'COM20', 115200)
@@ -74,7 +75,7 @@ class MacroPadApp(QMainWindow):
         
         self.initUI()
         self.load_macros_and_update_list()
-
+        
     def initUI(self):
         self.setWindowTitle('MacroPad Serial Interface')
         self.setGeometry(100, 100, 800, 600)
@@ -337,3 +338,4 @@ class MacroPadApp(QMainWindow):
             QApplication.quit()
         else:
             event.ignore()
+            
