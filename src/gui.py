@@ -235,7 +235,7 @@ class MacroPadApp(QMainWindow):
 
         elif index == 1:  # Media Control Keys
             media_controls = [
-                'play/pause', 'stop', 'previous_track', 'next_track', 'volume_mute',
+                'play/pause', 'stop_media', 'previous_track', 'next_track', 'volume_mute',
                 'volume_up', 'volume_down'
             ]
             self.actionSelect.addItems(media_controls)

@@ -1,6 +1,10 @@
 {
-    "1: Pressed": {
+    "Enc1: +": {
         "type": "Media Control",
-        "action": "play/pause"
+        "action": "volume_up"
+    },
+    "2: Pressed": {
+        "type": "Media Control",
+        "action": "stop_media"
     }
 }
