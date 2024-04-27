@@ -9,12 +9,11 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, QL
                              QDockWidget, QLineEdit, QSystemTrayIcon, QMenu, QAction)
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import pyqtSignal, QObject, Qt
-import serial.tools.list_ports
+from serial.tools import list_ports
 
 from macro_manager import set_macro, save_macros, reload_macros, delete_macro
 from serial_manager import SerialManager
 from utils import resource_path
-
 # Check if the platform is Windows
 is_windows = sys.platform.startswith('win')
 
@@ -41,23 +40,36 @@ class SettingsDialog(QDialog):
         self.setWindowTitle('Settings')
         layout = QFormLayout(self)
 
+        # COM Port selection
         self.portInput = QComboBox(self)
-        self.portInput.addItems([port.device for port in serial.tools.list_ports.comports()])
-        self.portInput.setCurrentText(default_port)
+        ports = list_ports.comports()
+        port_list = [f"{port.device} - {port.description}" for port in ports]
+        self.portInput.addItems(port_list)
+
+        # Set current index to the default port if it exists
+        default_index = next((i for i, item in enumerate(port_list) if item.startswith(default_port)), -1)
+        if default_index != -1:
+            self.portInput.setCurrentIndex(default_index)
+
         layout.addRow('Serial Port:', self.portInput)
 
+        # Baud Rate input
         self.baudRateInput = QLineEdit(self)
         self.baudRateInput.setPlaceholderText('115200')
         self.baudRateInput.setText(default_baud)
         layout.addRow('Baud Rate:', self.baudRateInput)
 
+        # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
 
     def getSettings(self):
-        return self.portInput.currentText(), self.baudRateInput.text()
+        selected_text = self.portInput.currentText()
+        port = selected_text.split(' - ')[0]  # Only retrieve the COM part
+        baud_rate = self.baudRateInput.text()
+        return port, baud_rate
 
 def ensure_data_directory_exists():
     data_dir = resource_path('Data')
@@ -76,7 +88,8 @@ def load_settings():
     try:
         with open(settings_path, 'r') as f:
             settings = json.load(f)
-        available_ports = [port.device for port in serial.tools.list_ports.comports()]
+        # Use list_ports.comports() to list available COM ports
+        available_ports = [port.device for port in list_ports.comports()]
         if settings['port'] in available_ports:
             return settings['port'], settings['baud_rate']
         else:
