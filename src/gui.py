@@ -171,10 +171,16 @@ class MacroPadApp(QMainWindow):
                 print(f"Settings update error: {e}")
 
     def set_or_edit_macro(self):
-        command = self.decodedVar
+        command = self.decodedVar.strip()  # Strip any leading/trailing whitespace
         action_type = self.actionTypeSelect.currentText()
         macro_action = self.actionSelect.currentText()
 
+        # Check if the command is empty
+        if not command:
+            QMessageBox.warning(self, "Invalid Command", "No command detected. Please receive a valid command before setting a macro.")
+            return
+
+        # Check if the macro action is empty
         if not macro_action:
             QMessageBox.warning(self, "Invalid Macro", "Macro action cannot be empty.")
             return
@@ -242,7 +248,7 @@ class MacroPadApp(QMainWindow):
 
         elif index == 2:  # Function Keys
             function_keys = [
-                'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12'
+                'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12','f13','f14','f15','f16','f17','f18','f19','f20','f21','f22','f23','f24'
             ]
             self.actionSelect.addItems(function_keys)
 
@@ -268,12 +274,20 @@ class MacroPadApp(QMainWindow):
         try:
             decoded_data = data.decode('utf-8').strip()
             print(f"Received data: {decoded_data}")  # Debug print
+
+            # List of strings to ignore
+            ignore_list = ['UNIT0', 'UNIT1', 'UNIT2', 'UNIT3']
+
+            # Check if the received data is in the ignore list
+            if decoded_data in ignore_list:
+                print(f"Ignored data: {decoded_data}")
+                return  # Skip processing this data
+
             self.guiUpdater.updateTextSignal.emit(decoded_data)
             self.decodedVar = decoded_data
             self.execute_macro(decoded_data)
         except UnicodeDecodeError:
             print("Received non-UTF-8 data")
-
     def execute_macro(self, command):
         macro = self.MacroPadApp.get(command)
         if macro:

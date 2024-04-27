@@ -6,5 +6,9 @@
     "2: Pressed": {
         "type": "Media Control",
         "action": "stop_media"
+    },
+    "1: Pressed": {
+        "type": "Modifier Key",
+        "action": "win"
     }
 }
