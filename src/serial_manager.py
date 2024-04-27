@@ -11,38 +11,38 @@ class SerialManager:
         self.serial_port = None
         self.running = False
         self.thread = None
-        self.start()  # Start the serial connection
-
-    def update_settings(self, port, baud_rate):
-        if self.serial_port:
-            self.serial_port.close()
-        self.port = port
-        self.baud_rate = baud_rate
         self.start()
 
     def start(self):
+        self.stop()  # Ensure any existing connection and thread are stopped before starting new
         try:
-            self.serial_port = serial.Serial(self.port, int(self.baud_rate), timeout=1)
+            self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=1)
             self.running = True
-            self.read_from_port()
+            self.thread = threading.Thread(target=self._read_from_port, daemon=True)
+            self.thread.start()
         except serial.SerialException as e:
             logging.error(f"Failed to open serial port {self.port} at {self.baud_rate}: {e}")
 
-    def read_from_port(self):
-        if not self.thread:
-            self.thread = threading.Thread(target=self._read_from_port, daemon=True)
-            self.thread.start()
+    def stop(self):
+        if self.running:
+            self.running = False
+            if self.thread is not None:
+                self.thread.join()
+            if self.serial_port is not None:
+                self.serial_port.close()
 
     def _read_from_port(self):
         while self.running:
-            if self.serial_port.in_waiting > 0:
-                data = self.serial_port.readline()
-                if data:
-                    self.data_callback(data)
+            try:
+                if self.serial_port.in_waiting > 0:
+                    data = self.serial_port.readline()
+                    if data:
+                        self.data_callback(data)
+            except serial.SerialException as e:
+                logging.error(f"Error reading from serial port: {e}")
+                break  # Exit the loop if we encounter an error
 
-    def stop(self):
-        self.running = False
-        if self.thread:
-            self.thread.join()
-        if self.serial_port:
-            self.serial_port.close()
+    def update_settings(self, port, baud_rate):
+        self.port = port
+        self.baud_rate = baud_rate
+        self.start()  # Restart the connection with new settings

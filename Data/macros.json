@@ -6,9 +6,5 @@
     "A: Pressed": {
         "type": "Media Control",
         "action": "play/pause"
-    },
-    "Enc1: -": {
-        "type": "Media Control",
-        "action": "previous_track"
     }
 }
