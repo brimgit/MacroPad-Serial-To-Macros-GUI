@@ -1,20 +1,26 @@
 import sys
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QIcon
 from gui import MacroPadApp
 from serial_manager import SerialManager
 from utils import resource_path  # Import the resource_path function
-from PyQt5.QtGui import QIcon
+
+def load_stylesheet():
+    try:
+        with open(resource_path('Data/style.css'), 'r') as f:
+            stylesheet = f.read()
+            return stylesheet
+    except Exception as e:
+        print(f"Failed to load stylesheet: {e}")
+        return ""
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyleSheet(load_stylesheet())  # Apply the stylesheet globally
+
     ex = MacroPadApp()
-    
-    # Set the window icon
-    ex.setWindowIcon(QIcon(resource_path('Assets/Images/icon.ico')))
-    
-    serial_manager = SerialManager(ex.handle_received_data)
-    serial_manager.start()
-    ex.load_stylesheet()  # Make sure stylesheet is loaded here
+    ex.setWindowIcon(QIcon(resource_path('Assets/Images/icon.ico')))  # Set the window icon
+
     ex.show()
     exit_code = app.exec_()
     sys.exit(exit_code)

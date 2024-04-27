@@ -1,14 +1,14 @@
 {
     "Enc1: +": {
         "type": "Media Control",
-        "action": "volume_up"
+        "action": "next_track"
     },
-    "2: Pressed": {
+    "A: Pressed": {
         "type": "Media Control",
-        "action": "stop_media"
+        "action": "play/pause"
     },
-    "1: Pressed": {
-        "type": "Modifier Key",
-        "action": "win"
+    "Enc1: -": {
+        "type": "Media Control",
+        "action": "previous_track"
     }
 }

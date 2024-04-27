@@ -1,21 +1,18 @@
 import sys
-import logging
 import os
-
-from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QLabel,
+import logging
+import keyboard
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel,
                              QTextEdit, QListWidget, QPushButton, QMessageBox,
                              QDialog, QFormLayout, QDialogButtonBox, QComboBox,
-                             QDockWidget, QLineEdit, QApplication, QSystemTrayIcon, QMenu, QAction)
+                             QDockWidget, QLineEdit, QSystemTrayIcon, QMenu, QAction)
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import pyqtSignal, QObject, Qt
+import serial.tools.list_ports
 
-import keyboard
 from macro_manager import set_macro, save_macros, reload_macros, delete_macro
 from serial_manager import SerialManager
 from utils import resource_path
-
-# Check if the platform is Windows
-is_windows = sys.platform.startswith('win')
 
 # Create 'logs' directory if it does not exist
 if not os.path.exists('logs'):
@@ -23,64 +20,64 @@ if not os.path.exists('logs'):
 
 # Set up logging to file
 logging.basicConfig(
-    level=logging.ERROR,  # Log error and above levels
+    level=logging.ERROR,
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
-    filename='logs/logs.txt',  # Log file path
-    filemode='a'  # Append mode
+    filename='logs/logs.txt',
+    filemode='a'
 )
-
-# Optionally, set up logging to console for debugging
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.ERROR)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(formatter)
-logging.getLogger('').addHandler(console_handler)
 
 class GuiUpdater(QObject):
     updateTextSignal = pyqtSignal(str)
     executeMacroSignal = pyqtSignal(str)
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, default_port='COM20', default_baud='115200'):
         super().__init__(parent)
         self.setWindowTitle('Settings')
         layout = QFormLayout(self)
-        self.portInput = QLineEdit(self)
-        self.portInput.setPlaceholderText('COM20')
+
+        self.portInput = QComboBox(self)
+        self.portInput.addItems([port.device for port in serial.tools.list_ports.comports()])
+        self.portInput.setCurrentText(default_port)
         layout.addRow('Serial Port:', self.portInput)
+
         self.baudRateInput = QLineEdit(self)
         self.baudRateInput.setPlaceholderText('115200')
+        self.baudRateInput.setText(default_baud)
         layout.addRow('Baud Rate:', self.baudRateInput)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
 
     def getSettings(self):
-        return self.portInput.text(), self.baudRateInput.text()
+        return self.portInput.currentText(), self.baudRateInput.text()
 
 class MacroPadApp(QMainWindow):
-
     def __init__(self):
         super().__init__()
-        self.serial_manager = SerialManager(self.handle_received_data, 'COM20', 115200)
+        self.serial_manager = None
         self.decodedVar = ""
         self.guiUpdater = GuiUpdater()
         self.guiUpdater.updateTextSignal.connect(self.updateReceivedDataDisplay)
         self.guiUpdater.executeMacroSignal.connect(self.execute_macro)
-        # Initialize system tray icon
-        self.tray_icon = QSystemTrayIcon(QIcon(resource_path('Assets/Images/icon.png')), self)
-        self.tray_icon.activated.connect(self.toggle_window)
-        self.create_tray_menu()
-        self.setWindowIcon(QIcon(resource_path('Assets/Images/icon.ico')))
+
         self.initUI()
+        self.showSettingsDialog()
         self.load_macros_and_update_list()
-        
+
     def initUI(self):
         self.setWindowTitle('MacroPad Serial Interface')
         self.setGeometry(100, 100, 800, 600)
         self.createSidebar()
+        self.setWindowIcon(QIcon(resource_path('Assets/Images/icon.ico')))
+
+        # Initialize the system tray icon
+        self.tray_icon = QSystemTrayIcon(QIcon(resource_path('Assets/Images/icon.png')), self)
+        self.tray_icon.activated.connect(self.toggle_window)
+        self.create_tray_menu()  # Ensure this method sets up the tray menu properly
 
         main_layout = QVBoxLayout()
         self.statusLabel = QLabel("Ready")
@@ -113,8 +110,13 @@ class MacroPadApp(QMainWindow):
         centralWidget.setLayout(main_layout)
         self.setCentralWidget(centralWidget)
 
-        if not is_windows:
-            self.load_stylesheet()
+    def showSettingsDialog(self):
+        dialog = SettingsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            port, baud_rate = dialog.getSettings()
+            self.serial_manager = SerialManager(self.handle_received_data, port, baud_rate)
+        else:
+            sys.exit(0)  # Exit the application if no settings are chosen
 
     def createSidebar(self):
         self.sidebar = QDockWidget("", self)
@@ -346,9 +348,10 @@ class MacroPadApp(QMainWindow):
 
     def closeEvent(self, event):
         reply = QMessageBox.question(self, 'Exit', 'Are you sure you want to exit?',
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.tray_icon.hide()
+            if hasattr(self, 'tray_icon'):  # Check if tray_icon is initialized
+                self.tray_icon.hide()
             event.accept()
             QApplication.quit()
         else:
