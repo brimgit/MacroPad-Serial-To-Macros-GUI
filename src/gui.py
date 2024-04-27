@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import logging
 import keyboard
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel,
@@ -14,17 +15,20 @@ from macro_manager import set_macro, save_macros, reload_macros, delete_macro
 from serial_manager import SerialManager
 from utils import resource_path
 
+# Check if the platform is Windows
+is_windows = sys.platform.startswith('win')
+
 # Create 'logs' directory if it does not exist
 if not os.path.exists('logs'):
     os.makedirs('logs')
 
 # Set up logging to file
 logging.basicConfig(
-    level=logging.ERROR,
+    level=logging.ERROR,  # Log error and above levels
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
-    filename='logs/logs.txt',
-    filemode='a'
+    filename='logs/logs.txt',  # Log file path
+    filemode='a'  # Append mode
 )
 
 class GuiUpdater(QObject):
@@ -55,6 +59,30 @@ class SettingsDialog(QDialog):
     def getSettings(self):
         return self.portInput.currentText(), self.baudRateInput.text()
 
+def ensure_data_directory_exists():
+    data_dir = resource_path('Data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+def save_settings(port, baud_rate):
+    ensure_data_directory_exists()
+    settings_path = resource_path('Data/settings.json')
+    settings = {'port': port, 'baud_rate': baud_rate}
+    with open(settings_path, 'w') as f:
+        json.dump(settings, f)
+
+def load_settings():
+    settings_path = resource_path('Data/settings.json')
+    try:
+        with open(settings_path, 'r') as f:
+            settings = json.load(f)
+        available_ports = [port.device for port in serial.tools.list_ports.comports()]
+        if settings['port'] in available_ports:
+            return settings['port'], settings['baud_rate']
+        else:
+            return None, None  # Port no longer available
+    except FileNotFoundError:
+        return None, None  # No settings file found
 class MacroPadApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -67,17 +95,17 @@ class MacroPadApp(QMainWindow):
         self.initUI()
         self.showSettingsDialog()
         self.load_macros_and_update_list()
-
+        
     def initUI(self):
         self.setWindowTitle('MacroPad Serial Interface')
         self.setGeometry(100, 100, 800, 600)
         self.createSidebar()
         self.setWindowIcon(QIcon(resource_path('Assets/Images/icon.ico')))
-
-        # Initialize the system tray icon
+        
+        # System Tray Icon
         self.tray_icon = QSystemTrayIcon(QIcon(resource_path('Assets/Images/icon.png')), self)
         self.tray_icon.activated.connect(self.toggle_window)
-        self.create_tray_menu()  # Ensure this method sets up the tray menu properly
+        self.create_tray_menu()
 
         main_layout = QVBoxLayout()
         self.statusLabel = QLabel("Ready")
@@ -111,12 +139,18 @@ class MacroPadApp(QMainWindow):
         self.setCentralWidget(centralWidget)
 
     def showSettingsDialog(self):
-        dialog = SettingsDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
-            port, baud_rate = dialog.getSettings()
-            self.serial_manager = SerialManager(self.handle_received_data, port, baud_rate)
-        else:
-            sys.exit(0)  # Exit the application if no settings are chosen
+        port, baud_rate = load_settings()
+        if port is None or baud_rate is None:
+            dialog = SettingsDialog(self)
+            if dialog.exec_() == QDialog.Accepted:
+                port, baud_rate = dialog.getSettings()
+                save_settings(port, baud_rate)
+            else:
+                sys.exit(0)  # Exit if no settings are selected
+
+        self.serial_manager = SerialManager(self.handle_received_data, port, baud_rate)
+    
+
 
     def createSidebar(self):
         self.sidebar = QDockWidget("", self)
