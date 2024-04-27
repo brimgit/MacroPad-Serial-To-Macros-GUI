@@ -16,7 +16,7 @@ def get_data_path(filename):
     """ Get the path to data files, ensures it's writable """
     if getattr(sys, 'frozen', False):
         # If the application is run as a bundle, the writable directory is set to the user's app data directory
-        app_name = "MyAppName"
+        app_name = "BrimPad"
         app_data_path = os.path.join(os.getenv('APPDATA'), app_name)
         if not os.path.exists(app_data_path):
             os.makedirs(app_data_path)
