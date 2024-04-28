@@ -1,9 +1,5 @@
 {
-    "Enc1: +": {
-        "type": "Media Control",
-        "action": "next_track"
-    },
-    "A: Pressed": {
+    "1: Pressed": {
         "type": "Media Control",
         "action": "play/pause"
     }

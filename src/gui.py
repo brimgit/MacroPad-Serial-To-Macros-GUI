@@ -12,8 +12,9 @@ from PyQt5.QtCore import pyqtSignal, QObject, Qt
 from serial.tools import list_ports
 
 from macro_manager import set_macro, save_macros, reload_macros, delete_macro
-from serial_manager import SerialManager
+from serial_manager import SerialManager, adjust_volume
 from utils import resource_path
+
 # Check if the platform is Windows
 is_windows = sys.platform.startswith('win')
 
@@ -105,10 +106,17 @@ class MacroPadApp(QMainWindow):
         self.guiUpdater.updateTextSignal.connect(self.updateReceivedDataDisplay)
         self.guiUpdater.executeMacroSignal.connect(self.execute_macro)
 
+        self.encoder_app_map = {
+            1: 'chrome.exe',  # Example: Encoder 1 controls Chrome's volume
+            2: 'Spotify.exe', # Encoder 2 controls Spotify
+            3: 'vlc.exe',     # Encoder 3 controls VLC Player
+            4: 'firefox.exe'  # Encoder 4 controls Firefox
+        }
+        
         self.initUI()
         self.showSettingsDialog()
         self.load_macros_and_update_list()
-        
+         
     def initUI(self):
         self.setWindowTitle('MacroPad Serial Interface')
         self.setGeometry(100, 100, 800, 600)
@@ -150,7 +158,7 @@ class MacroPadApp(QMainWindow):
         centralWidget = QWidget()
         centralWidget.setLayout(main_layout)
         self.setCentralWidget(centralWidget)
-
+           
     def showSettingsDialog(self):
         port, baud_rate = load_settings()
         if port is None or baud_rate is None:
@@ -322,21 +330,36 @@ class MacroPadApp(QMainWindow):
     def handle_received_data(self, data):
         try:
             decoded_data = data.decode('utf-8').strip()
-            print(f"Received data: {decoded_data}")  # Debug print
+            print(f"Received data: {decoded_data}")  # Debug print to confirm data reception
 
-            # List of strings to ignore
-            ignore_list = ['UNIT0', 'UNIT1', 'UNIT2', 'UNIT3']
+            # Debugging data processing logic
+            encoder_cmd = decoded_data.split(': ')
+            if len(encoder_cmd) == 2 and encoder_cmd[0].startswith('Enc'):
+                encoder_id = int(encoder_cmd[0][3:])  # Extract encoder number
+                command = encoder_cmd[1].strip()  # Ensure command is stripped of whitespace
+                app_name = self.encoder_app_map.get(encoder_id)  # Retrieve mapped application name
 
-            # Check if the received data is in the ignore list
-            if decoded_data in ignore_list:
-                print(f"Ignored data: {decoded_data}")
-                return  # Skip processing this data
+                if app_name:
+                    print(f"Handling volume adjustment for {app_name} with command {command}")
+                    if command == '+':
+                        adjust_volume(app_name, increase=True)
+                    elif command == '-':
+                        adjust_volume(app_name, increase=False)
+                else:
+                    print(f"No application mapped to encoder {encoder_id}")
 
-            self.guiUpdater.updateTextSignal.emit(decoded_data)
-            self.decodedVar = decoded_data
-            self.execute_macro(decoded_data)
+            else:
+                # If not an encoder command, handle as a regular macro or display update
+                print("Data received does not match encoder patterns.")
+                self.guiUpdater.updateTextSignal.emit(decoded_data)
+                self.decodedVar = decoded_data
+                self.execute_macro(decoded_data)
+
         except UnicodeDecodeError:
             print("Received non-UTF-8 data")
+        except Exception as e:
+            print(f"Error processing received data: {e}")
+                  
     def execute_macro(self, command):
         macro = self.MacroPadApp.get(command)
         if macro:
@@ -365,7 +388,7 @@ class MacroPadApp(QMainWindow):
 
     def updateReceivedDataDisplay(self, text):
         self.receivedDataDisplay.append(text)
-        
+            
     def create_tray_menu(self):
         # Create tray menu
         self.tray_menu = QMenu()

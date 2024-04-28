@@ -2,7 +2,29 @@ import serial
 import threading
 import logging
 
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+
 logging.basicConfig(level=logging.INFO)
+def adjust_volume(application_name, increase=True):
+    print(f"Adjusting volume for {application_name}, increase: {increase}")
+    sessions = AudioUtilities.GetAllSessions()
+    for session in sessions:
+        if session.Process and session.Process.name() == application_name:
+            volume = session.SimpleAudioVolume
+            current_volume = volume.GetMasterVolume()
+            print(f"Current volume of {application_name}: {current_volume}")
+            if increase:
+                new_volume = min(current_volume + 0.1, 1.0)
+            else:
+                new_volume = max(current_volume - 0.1, 0.0)
+            volume.SetMasterVolume(new_volume, None)
+            print(f"New volume of {application_name}: {new_volume}")
+            break
+    else:
+        print(f"No active session found for {application_name}")
+
 class SerialManager:
     def __init__(self, data_callback, port='COM20', baud_rate=115200):
         self.data_callback = data_callback
@@ -36,6 +58,7 @@ class SerialManager:
             try:
                 if self.serial_port.in_waiting > 0:
                     data = self.serial_port.readline()
+                    print(f"Raw data read: {data}")  # Debug print to check raw data
                     if data:
                         self.data_callback(data)
             except serial.SerialException as e:
