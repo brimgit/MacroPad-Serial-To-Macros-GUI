@@ -107,7 +107,7 @@ class MacroPadApp(QMainWindow):
         self.guiUpdater.executeMacroSignal.connect(self.execute_macro)
 
         self.encoder_app_map = {
-            1: 'chrome.exe',  # Example: Encoder 1 controls Chrome's volume
+            1: 'Discord.exe',  # Example: Encoder 1 controls Chrome's volume
             2: 'Spotify.exe', # Encoder 2 controls Spotify
             3: 'vlc.exe',     # Encoder 3 controls VLC Player
             4: 'firefox.exe'  # Encoder 4 controls Firefox

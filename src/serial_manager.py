@@ -7,6 +7,7 @@ from ctypes import cast, POINTER
 from comtypes import CLSCTX_ALL
 
 logging.basicConfig(level=logging.INFO)
+
 def adjust_volume(application_name, increase=True):
     print(f"Adjusting volume for {application_name}, increase: {increase}")
     sessions = AudioUtilities.GetAllSessions()
