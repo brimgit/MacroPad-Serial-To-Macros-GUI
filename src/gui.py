@@ -35,36 +35,49 @@ class GuiUpdater(QObject):
     updateTextSignal = pyqtSignal(str)
     executeMacroSignal = pyqtSignal(str)
 
+from PyQt5.QtWidgets import QDialog, QFormLayout, QComboBox, QPushButton, QDialogButtonBox
+from PyQt5.QtCore import Qt
+from serial.tools import list_ports
+
 class SettingsDialog(QDialog):
     def __init__(self, parent=None, default_port='COM20', default_baud='115200'):
         super().__init__(parent)
         self.setWindowTitle('Settings')
-        layout = QFormLayout(self)
+        self.layout = QFormLayout(self)
+        self.layout.setSpacing(10)  # Add some space between form rows for better clarity
 
         # COM Port selection
         self.portInput = QComboBox(self)
-        ports = list_ports.comports()
-        port_list = [f"{port.device} - {port.description}" for port in ports]
-        self.portInput.addItems(port_list)
-
-        # Set current index to the default port if it exists
-        default_index = next((i for i, item in enumerate(port_list) if item.startswith(default_port)), -1)
-        if default_index != -1:
-            self.portInput.setCurrentIndex(default_index)
-
-        layout.addRow('Serial Port:', self.portInput)
+        self.populate_ports(default_port)
+        self.layout.addRow("Serial Port:", self.portInput)
 
         # Baud Rate input
         self.baudRateInput = QLineEdit(self)
         self.baudRateInput.setPlaceholderText('115200')
         self.baudRateInput.setText(default_baud)
-        layout.addRow('Baud Rate:', self.baudRateInput)
+        self.layout.addRow('Baud Rate:', self.baudRateInput)
 
-        # Buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
+        # Refresh button
+        self.refreshButton = QPushButton("Refresh Ports", self)
+        self.refreshButton.clicked.connect(self.populate_ports)
+        self.refreshButton.setToolTip("Click to refresh the list of available COM ports.")
+        self.layout.addRow(self.refreshButton)
+
+        # Buttons for OK and Cancel
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        self.layout.addRow(self.buttons)
+
+    def populate_ports(self, default_port=None):
+        self.portInput.clear()
+        ports = list_ports.comports()
+        port_list = [f"{port.device} - {port.description}" for port in ports]
+        self.portInput.addItems(port_list)
+        if default_port:
+            default_index = next((i for i, item in enumerate(port_list) if item.startswith(default_port)), -1)
+            if default_index != -1:
+                self.portInput.setCurrentIndex(default_index)
 
     def getSettings(self):
         selected_text = self.portInput.currentText()
@@ -107,7 +120,7 @@ class MacroPadApp(QMainWindow):
         self.guiUpdater.executeMacroSignal.connect(self.execute_macro)
 
         self.encoder_app_map = {
-            1: 'Discord.exe',  # Example: Encoder 1 controls Chrome's volume
+            1: 'Discord.exe',  # Example: Encoder 1 controls Discord
             2: 'Spotify.exe', # Encoder 2 controls Spotify
             3: 'vlc.exe',     # Encoder 3 controls VLC Player
             4: 'firefox.exe'  # Encoder 4 controls Firefox

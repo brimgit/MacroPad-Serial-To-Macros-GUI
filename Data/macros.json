@@ -2,5 +2,9 @@
     "1: Pressed": {
         "type": "Media Control",
         "action": "play/pause"
+    },
+    "2: Pressed": {
+        "type": "Function Key",
+        "action": "f1"
     }
 }
