@@ -10,7 +10,7 @@
 #define PIN3        0 // Adjust for your third strip
 #define PIN4        2 // Adjust for your fourth strip
 #define NUMPIXELS  10 // Number of LEDs in each strip
-#define MAX_BRIGHTNESS 100 // Max brightness for an LED
+#define MAX_BRIGHTNESS 50 // Max brightness for an LED
 
 Adafruit_NeoPixel strips[4] = 
 {

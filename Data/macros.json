@@ -1,10 +1,18 @@
 {
     "1: Pressed": {
         "type": "Media Control",
-        "action": "play/pause"
+        "action": "previous_track"
     },
     "2: Pressed": {
-        "type": "Function Key",
-        "action": "f1"
+        "type": "Media Control",
+        "action": "next_track"
+    },
+    "A: Pressed": {
+        "type": "Media Control",
+        "action": "volume_mute"
+    },
+    "3: Pressed": {
+        "type": "Media Control",
+        "action": "play/pause"
     }
 }
