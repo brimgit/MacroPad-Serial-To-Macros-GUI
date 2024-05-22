@@ -1,7 +1,7 @@
-//------------------------------------------------------Library's---------------------------------------------------------
 #include "FastInterruptEncoder.h"
 #include <Keypad.h>
 #include <Adafruit_NeoPixel.h>
+#include <EEPROM.h> // Include the EEPROM library
 
 //-------------------------------------------------------Neopixel setup-------------------------------------------------------
 #define PIN1        5 // The pin your first strip is connected to
@@ -19,14 +19,13 @@ Adafruit_NeoPixel strips[4] =
   Adafruit_NeoPixel(NUMPIXELS, PIN4, NEO_GRB + NEO_KHZ800)
 };
 
-int colors[4][3] = { // Default color is white
-  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS},
-  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS},
-  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS},
-  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS}
-};
-
+int colors[4][3]; // Store color values for each strip
 int percentages[4] = {0, 0, 0, 0}; // Store percentage values for each strip
+
+//-------------------------------------------------------EEPROM Addresses-------------------------------------------------------
+#define EEPROM_SIZE 32 // Define the size of the EEPROM
+#define EEPROM_START_ADDRESS 0
+
 //-------------------------------------------------------End setup-------------------------------------------------------
 //-------------------------------------------------------Begin Encoders----------------------------------------------------
 #define ENCODER_READ_DELAY    50
@@ -56,8 +55,12 @@ char keys[ROWS][COLS] = {
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 //-------------------------------------------------------End Keypad----------------------------------------------------
+
 void setup() {
   Serial.begin(115200);
+  
+  // Initialize EEPROM
+  EEPROM.begin(EEPROM_SIZE);
   
   // Initialize all encoders and check each one
   initEncoder(enc1, 0, "Encoder 1");
@@ -72,10 +75,12 @@ void setup() {
     strips[i].show(); // Initialize all pixels to 'off'
   }
 
+  // Load colors from EEPROM
+  loadColorsFromEEPROM();
+
   // Run the startup sequence
   startupSequence();
 }
-
 void initEncoder(Encoder &encoder, int id, const char *name) {
   if (!encoder.init(id)) {
     while (1); // Halt if initialization fails
@@ -144,10 +149,7 @@ void loop()
       sscanf(input.c_str(), "%d:color(%d,%d,%d)", &stripIndex, &red, &green, &blue);
       stripIndex -= 1; // Convert to 0-based index
       if(stripIndex >= 0 && stripIndex < 4 && red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 && blue <= 255) {
-        colors[stripIndex][0] = red;
-        colors[stripIndex][1] = green;
-        colors[stripIndex][2] = blue;
-        lightUpPercentage(stripIndex, percentages[stripIndex]);
+        changeStripColor(stripIndex, red, green, blue);
       } else {
         Serial.println("Invalid input. Please format as stripIndex:color(R,G,B) (e.g., 1:color(255,0,0)).");
       }
@@ -193,11 +195,13 @@ void lightUpPercentage(int stripIndex, int percentage)
   strips[stripIndex].show(); // Update the strip to show the new colors
 }
 
-void changeStripColor(int stripIndex, int red, int green, int blue) {
+void changeStripColor(int stripIndex, int red, int green, int blue) 
+{
   colors[stripIndex][0] = red;
   colors[stripIndex][1] = green;
   colors[stripIndex][2] = blue;
   lightUpPercentage(stripIndex, percentages[stripIndex]);
+  saveColorsToEEPROM();
 }
 //-------------------------------------------------------End Handle LED-Brightness-------------------------------------------------------
 void checkAndPrintChange(Encoder &enc, int &lastTicks, const char* label) 
@@ -235,3 +239,24 @@ void handleKeypad()
   }
 }
 //-------------------------------------------------------End Keypad Function----------------------------------------------------
+
+//-------------------------------------------------------EEPROM Functions-------------------------------------------------------
+void saveColorsToEEPROM() 
+{
+  for (int i = 0; i < 4; i++) {
+    EEPROM.write(EEPROM_START_ADDRESS + i * 3, colors[i][0]);
+    EEPROM.write(EEPROM_START_ADDRESS + i * 3 + 1, colors[i][1]);
+    EEPROM.write(EEPROM_START_ADDRESS + i * 3 + 2, colors[i][2]);
+  }
+  EEPROM.commit(); // Ensure data is written to EEPROM
+}
+
+void loadColorsFromEEPROM() 
+{
+  for (int i = 0; i < 4; i++) {
+    colors[i][0] = EEPROM.read(EEPROM_START_ADDRESS + i * 3);
+    colors[i][1] = EEPROM.read(EEPROM_START_ADDRESS + i * 3 + 1);
+    colors[i][2] = EEPROM.read(EEPROM_START_ADDRESS + i * 3 + 2);
+  }
+}
+//-------------------------------------------------------End EEPROM Functions---------------------------------------------------
