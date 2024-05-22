@@ -1,4 +1,3 @@
-
 //------------------------------------------------------Library's---------------------------------------------------------
 #include "FastInterruptEncoder.h"
 #include <Keypad.h>
@@ -19,6 +18,15 @@ Adafruit_NeoPixel strips[4] =
   Adafruit_NeoPixel(NUMPIXELS, PIN3, NEO_GRB + NEO_KHZ800),
   Adafruit_NeoPixel(NUMPIXELS, PIN4, NEO_GRB + NEO_KHZ800)
 };
+
+int colors[4][3] = { // Default color is white
+  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS},
+  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS},
+  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS},
+  {MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS}
+};
+
+int percentages[4] = {0, 0, 0, 0}; // Store percentage values for each strip
 //-------------------------------------------------------End setup-------------------------------------------------------
 //-------------------------------------------------------Begin Encoders----------------------------------------------------
 #define ENCODER_READ_DELAY    50
@@ -115,34 +123,43 @@ void loop()
   enc3.loop();
   enc4.loop();
    
-    if ((unsigned long)(millis() - encodertimer) >= ENCODER_READ_DELAY) 
-    {
-      // Check for changes and print the corresponding sign with encoder label
-      checkAndPrintChange(enc1, lastTicks1, "Enc1");
-      checkAndPrintChange(enc2, lastTicks2, "Enc2");
-      checkAndPrintChange(enc3, lastTicks3, "Enc3");
-      checkAndPrintChange(enc4, lastTicks4, "Enc4");
-      
-      encodertimer = millis();
-    } 
+  if ((unsigned long)(millis() - encodertimer) >= ENCODER_READ_DELAY) 
+  {
+    // Check for changes and print the corresponding sign with encoder label
+    checkAndPrintChange(enc1, lastTicks1, "Enc1");
+    checkAndPrintChange(enc2, lastTicks2, "Enc2");
+    checkAndPrintChange(enc3, lastTicks3, "Enc3");
+    checkAndPrintChange(enc4, lastTicks4, "Enc4");
+    
+    encodertimer = millis();
+  } 
 
 //-------------------------------------------------------Handle Neopixels-------------------------------------------------------
-  //to be changed:
-  //stripIndex = Encoder
-  //percentage = Custom value for each encoder
-
   if (Serial.available() > 0) 
   {
     String input = Serial.readStringUntil('\n'); // Read the input string until newline
-    int stripIndex = input.charAt(0) - '1'; // Convert the first character to strip index (0-3)
-    int percentage = input.substring(2).toInt(); // Extract percentage from the input
-
-    if(stripIndex >= 0 && stripIndex < 4 && percentage >= 0 && percentage <= 100) 
-    {
-      lightUpPercentage(stripIndex, percentage);
-    } else 
-    {
-      Serial.println("Invalid input. Please format as stripIndex:percentage (e.g., 1:50).");
+    if (input.indexOf("color") != -1) {
+      int stripIndex;
+      int red, green, blue;
+      sscanf(input.c_str(), "%d:color(%d,%d,%d)", &stripIndex, &red, &green, &blue);
+      stripIndex -= 1; // Convert to 0-based index
+      if(stripIndex >= 0 && stripIndex < 4 && red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 && blue <= 255) {
+        colors[stripIndex][0] = red;
+        colors[stripIndex][1] = green;
+        colors[stripIndex][2] = blue;
+        lightUpPercentage(stripIndex, percentages[stripIndex]);
+      } else {
+        Serial.println("Invalid input. Please format as stripIndex:color(R,G,B) (e.g., 1:color(255,0,0)).");
+      }
+    } else {
+      int stripIndex = input.charAt(0) - '1'; // Convert the first character to strip index (0-3)
+      int percentage = input.substring(2).toInt(); // Extract percentage from the input
+      if(stripIndex >= 0 && stripIndex < 4 && percentage >= 0 && percentage <= 100) {
+        percentages[stripIndex] = percentage;
+        lightUpPercentage(stripIndex, percentage);
+      } else {
+        Serial.println("Invalid input. Please format as stripIndex:percentage (e.g., 1:50).");
+      }
     }
   }
 //-------------------------------------------------------End Handle Neopixels-------------------------------------------------------
@@ -158,11 +175,15 @@ void lightUpPercentage(int stripIndex, int percentage)
     if (i < fullLeds) 
     {
       // This LED is fully lit
-      strips[stripIndex].setPixelColor(i, strips[stripIndex].Color(MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS));
+      strips[stripIndex].setPixelColor(i, strips[stripIndex].Color(colors[stripIndex][0], colors[stripIndex][1], colors[stripIndex][2]));
     } else if (i == fullLeds) 
     {
       // This LED is partially lit according to the percentage
-      strips[stripIndex].setPixelColor(i, strips[stripIndex].Color(partialLedBrightness, partialLedBrightness, partialLedBrightness));
+      strips[stripIndex].setPixelColor(i, strips[stripIndex].Color(
+        (colors[stripIndex][0] * partialLedBrightness) / MAX_BRIGHTNESS,
+        (colors[stripIndex][1] * partialLedBrightness) / MAX_BRIGHTNESS,
+        (colors[stripIndex][2] * partialLedBrightness) / MAX_BRIGHTNESS
+      ));
     } else 
     {
       // LEDs that should be off
@@ -170,6 +191,13 @@ void lightUpPercentage(int stripIndex, int percentage)
     }
   }
   strips[stripIndex].show(); // Update the strip to show the new colors
+}
+
+void changeStripColor(int stripIndex, int red, int green, int blue) {
+  colors[stripIndex][0] = red;
+  colors[stripIndex][1] = green;
+  colors[stripIndex][2] = blue;
+  lightUpPercentage(stripIndex, percentages[stripIndex]);
 }
 //-------------------------------------------------------End Handle LED-Brightness-------------------------------------------------------
 void checkAndPrintChange(Encoder &enc, int &lastTicks, const char* label) 
