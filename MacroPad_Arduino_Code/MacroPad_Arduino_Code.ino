@@ -81,6 +81,7 @@ void setup() {
   // Run the startup sequence
   startupSequence();
 }
+
 void initEncoder(Encoder &encoder, int id, const char *name) {
   if (!encoder.init(id)) {
     while (1); // Halt if initialization fails
@@ -253,10 +254,28 @@ void saveColorsToEEPROM()
 
 void loadColorsFromEEPROM() 
 {
+  bool validData = false;
   for (int i = 0; i < 4; i++) {
-    colors[i][0] = EEPROM.read(EEPROM_START_ADDRESS + i * 3);
-    colors[i][1] = EEPROM.read(EEPROM_START_ADDRESS + i * 3 + 1);
-    colors[i][2] = EEPROM.read(EEPROM_START_ADDRESS + i * 3 + 2);
+    int red = EEPROM.read(EEPROM_START_ADDRESS + i * 3);
+    int green = EEPROM.read(EEPROM_START_ADDRESS + i * 3 + 1);
+    int blue = EEPROM.read(EEPROM_START_ADDRESS + i * 3 + 2);
+
+    if (red != 255 || green != 255 || blue != 255) {
+      validData = true;
+    }
+    
+    colors[i][0] = red;
+    colors[i][1] = green;
+    colors[i][2] = blue;
+  }
+
+  if (!validData) {
+    // Initialize colors to white if EEPROM contains no valid data
+    for (int i = 0; i < 4; i++) {
+      colors[i][0] = MAX_BRIGHTNESS;
+      colors[i][1] = MAX_BRIGHTNESS;
+      colors[i][2] = MAX_BRIGHTNESS;
+    }
   }
 }
 //-------------------------------------------------------End EEPROM Functions---------------------------------------------------
