@@ -215,7 +215,7 @@ void lightUpPercentage(int stripIndex, int percentage)
         blue = colors[stripIndex][2];
       } else if (i == 7 || i == 8) {
         // LEDs 7-8 transition from the original color to the complementary color
-        float factor = (float)(percentage - 70) / 30.0; // Transition from 70% to 100%
+        float factor = (float)(i - 6) / 3.0; // Transition from LED 7 to LED 9
         red = colors[stripIndex][0] * (1 - factor) + volumeColors[stripIndex][0] * factor;
         green = colors[stripIndex][1] * (1 - factor) + volumeColors[stripIndex][1] * factor;
         blue = colors[stripIndex][2] * (1 - factor) + volumeColors[stripIndex][2] * factor;
