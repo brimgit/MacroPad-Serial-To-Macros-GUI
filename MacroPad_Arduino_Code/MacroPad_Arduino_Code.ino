@@ -20,10 +20,14 @@ Adafruit_NeoPixel strips[4] =
 };
 
 int colors[4][3]; // Store color values for each strip
+int fadeColors[4][3]; // Store fade color values for each strip
+int volumeColors[4][3]; // Store volume color values for each strip (complementary colors)
+bool useFade[4] = {false, false, false, false}; // Store whether to use fade for each strip
+bool useVolume[4] = {false, false, false, false}; // Store whether to use volume for each strip
 int percentages[4] = {0, 0, 0, 0}; // Store percentage values for each strip
 
 //-------------------------------------------------------EEPROM Addresses-------------------------------------------------------
-#define EEPROM_SIZE 32 // Define the size of the EEPROM
+#define EEPROM_SIZE 128 // Define the size of the EEPROM (increased size to store additional colors)
 #define EEPROM_START_ADDRESS 0
 
 //-------------------------------------------------------End setup-------------------------------------------------------
@@ -144,7 +148,27 @@ void loop()
   if (Serial.available() > 0) 
   {
     String input = Serial.readStringUntil('\n'); // Read the input string until newline
-    if (input.indexOf("color") != -1) {
+    if (input.indexOf("colorfade") != -1) {
+      int stripIndex;
+      int red, green, blue;
+      sscanf(input.c_str(), "%d:colorfade(%d,%d,%d)", &stripIndex, &red, &green, &blue);
+      stripIndex -= 1; // Convert to 0-based index
+      if(stripIndex >= 0 && stripIndex < 4 && red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 && blue <= 255) {
+        changeStripColorFade(stripIndex, red, green, blue);
+      } else {
+        Serial.println("Invalid input. Please format as stripIndex:colorfade(R,G,B) (e.g., 1:colorfade(0,255,0)).");
+      }
+    } else if (input.indexOf("colorvolume") != -1) {
+      int stripIndex;
+      int red, green, blue;
+      sscanf(input.c_str(), "%d:colorvolume(%d,%d,%d)", &stripIndex, &red, &green, &blue);
+      stripIndex -= 1; // Convert to 0-based index
+      if(stripIndex >= 0 && stripIndex < 4 && red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 && blue <= 255) {
+        changeStripColorVolume(stripIndex, red, green, blue);
+      } else {
+        Serial.println("Invalid input. Please format as stripIndex:colorvolume(R,G,B) (e.g., 1:colorvolume(0,255,0)).");
+      }
+    } else if (input.indexOf("color") != -1) {
       int stripIndex;
       int red, green, blue;
       sscanf(input.c_str(), "%d:color(%d,%d,%d)", &stripIndex, &red, &green, &blue);
@@ -167,6 +191,7 @@ void loop()
   }
 //-------------------------------------------------------End Handle Neopixels-------------------------------------------------------
 }
+
 //-------------------------------------------------------Handle LED-Brightness-------------------------------------------------------
 void lightUpPercentage(int stripIndex, int percentage) 
 {
@@ -175,17 +200,53 @@ void lightUpPercentage(int stripIndex, int percentage)
 
   for(int i = 0; i < NUMPIXELS; i++) 
   {
+    int red, green, blue;
+
+    if (useFade[stripIndex]) {
+      float factor = (float)percentage / 100.0;
+      red = colors[stripIndex][0] * (1 - factor) + fadeColors[stripIndex][0] * factor;
+      green = colors[stripIndex][1] * (1 - factor) + fadeColors[stripIndex][1] * factor;
+      blue = colors[stripIndex][2] * (1 - factor) + fadeColors[stripIndex][2] * factor;
+    } else if (useVolume[stripIndex]) {
+      if (i < 7) {
+        // LEDs 0-6 use the original color
+        red = colors[stripIndex][0];
+        green = colors[stripIndex][1];
+        blue = colors[stripIndex][2];
+      } else if (i == 7 || i == 8) {
+        // LEDs 7-8 transition from the original color to the complementary color
+        float factor = (float)(percentage - 70) / 30.0; // Transition from 70% to 100%
+        red = colors[stripIndex][0] * (1 - factor) + volumeColors[stripIndex][0] * factor;
+        green = colors[stripIndex][1] * (1 - factor) + volumeColors[stripIndex][1] * factor;
+        blue = colors[stripIndex][2] * (1 - factor) + volumeColors[stripIndex][2] * factor;
+      } else if (i == 9) {
+        // LED 9 is the complementary color
+        red = volumeColors[stripIndex][0];
+        green = volumeColors[stripIndex][1];
+        blue = volumeColors[stripIndex][2];
+      } else {
+        // Default to the original color for safety
+        red = colors[stripIndex][0];
+        green = colors[stripIndex][1];
+        blue = colors[stripIndex][2];
+      }
+    } else {
+      red = colors[stripIndex][0];
+      green = colors[stripIndex][1];
+      blue = colors[stripIndex][2];
+    }
+
     if (i < fullLeds) 
     {
       // This LED is fully lit
-      strips[stripIndex].setPixelColor(i, strips[stripIndex].Color(colors[stripIndex][0], colors[stripIndex][1], colors[stripIndex][2]));
+      strips[stripIndex].setPixelColor(i, strips[stripIndex].Color(red, green, blue));
     } else if (i == fullLeds) 
     {
       // This LED is partially lit according to the percentage
       strips[stripIndex].setPixelColor(i, strips[stripIndex].Color(
-        (colors[stripIndex][0] * partialLedBrightness) / MAX_BRIGHTNESS,
-        (colors[stripIndex][1] * partialLedBrightness) / MAX_BRIGHTNESS,
-        (colors[stripIndex][2] * partialLedBrightness) / MAX_BRIGHTNESS
+        (red * partialLedBrightness) / MAX_BRIGHTNESS,
+        (green * partialLedBrightness) / MAX_BRIGHTNESS,
+        (blue * partialLedBrightness) / MAX_BRIGHTNESS
       ));
     } else 
     {
@@ -201,10 +262,77 @@ void changeStripColor(int stripIndex, int red, int green, int blue)
   colors[stripIndex][0] = red;
   colors[stripIndex][1] = green;
   colors[stripIndex][2] = blue;
+  useFade[stripIndex] = false;
+  useVolume[stripIndex] = false;
   lightUpPercentage(stripIndex, percentages[stripIndex]);
   saveColorsToEEPROM();
 }
+
+void changeStripColorFade(int stripIndex, int red, int green, int blue) 
+{
+  fadeColors[stripIndex][0] = red;
+  fadeColors[stripIndex][1] = green;
+  fadeColors[stripIndex][2] = blue;
+  useFade[stripIndex] = true;
+  useVolume[stripIndex] = false;
+  lightUpPercentage(stripIndex, percentages[stripIndex]);
+  saveColorsToEEPROM();
+}
+
+void changeStripColorVolume(int stripIndex, int red, int green, int blue) 
+{
+  colors[stripIndex][0] = red;
+  colors[stripIndex][1] = green;
+  colors[stripIndex][2] = blue;
+  int ryb[3];
+  int compRyb[3];
+  int compRgb[3];
+  rgbToRyb(red, green, blue, ryb);
+  complementaryRyb(ryb, compRyb);
+  rybToRgb(compRyb[0], compRyb[1], compRyb[2], compRgb);
+  volumeColors[stripIndex][0] = compRgb[0];
+  volumeColors[stripIndex][1] = compRgb[1];
+  volumeColors[stripIndex][2] = compRgb[2];
+  useFade[stripIndex] = false;
+  useVolume[stripIndex] = true;
+  lightUpPercentage(stripIndex, percentages[stripIndex]);
+  saveColorsToEEPROM();
+}
+
+void rgbToRyb(int r, int g, int b, int ryb[3]) {
+  float w = fmin(r, fmin(g, b));
+  float y = fmin(r, g) - w;
+  float m = fmin(g, b) - w;
+  float c = fmin(r, b) - w;
+
+  ryb[0] = r - y - c;
+  ryb[1] = g - m - c;
+  ryb[2] = b - m - c;
+
+  ryb[0] += m;
+  ryb[1] += y;
+  ryb[2] += c;
+}
+
+void rybToRgb(int ry, int y, int b, int rgb[3]) {
+  float w = fmin(ry, fmin(y, b));
+  float r = ry + w;
+  float g = y + w;
+  float c = b + w;
+
+  rgb[0] = r;
+  rgb[1] = g - r;
+  rgb[2] = c - r;
+}
+
+void complementaryRyb(int ryb[3], int compRyb[3]) {
+  compRyb[0] = 255 - ryb[0];
+  compRyb[1] = 255 - ryb[1];
+  compRyb[2] = 255 - ryb[2];
+}
+
 //-------------------------------------------------------End Handle LED-Brightness-------------------------------------------------------
+
 void checkAndPrintChange(Encoder &enc, int &lastTicks, const char* label) 
 {
   int currentTicks = enc.getTicks();
@@ -219,6 +347,7 @@ void checkAndPrintChange(Encoder &enc, int &lastTicks, const char* label)
     lastTicks = currentTicks; // Update last ticks to current
   }
 }
+
 //-------------------------------------------------------Begin Keypad Function----------------------------------------------------
 void handleKeypad() 
 {
@@ -248,6 +377,12 @@ void saveColorsToEEPROM()
     EEPROM.write(EEPROM_START_ADDRESS + i * 3, colors[i][0]);
     EEPROM.write(EEPROM_START_ADDRESS + i * 3 + 1, colors[i][1]);
     EEPROM.write(EEPROM_START_ADDRESS + i * 3 + 2, colors[i][2]);
+    EEPROM.write(EEPROM_START_ADDRESS + 12 + i * 3, fadeColors[i][0]);
+    EEPROM.write(EEPROM_START_ADDRESS + 12 + i * 3 + 1, fadeColors[i][1]);
+    EEPROM.write(EEPROM_START_ADDRESS + 12 + i * 3 + 2, fadeColors[i][2]);
+    EEPROM.write(EEPROM_START_ADDRESS + 24 + i * 3, volumeColors[i][0]);
+    EEPROM.write(EEPROM_START_ADDRESS + 24 + i * 3 + 1, volumeColors[i][1]);
+    EEPROM.write(EEPROM_START_ADDRESS + 24 + i * 3 + 2, volumeColors[i][2]);
   }
   EEPROM.commit(); // Ensure data is written to EEPROM
 }
@@ -267,6 +402,13 @@ void loadColorsFromEEPROM()
     colors[i][0] = red;
     colors[i][1] = green;
     colors[i][2] = blue;
+    // Initialize fade colors to default color
+    fadeColors[i][0] = EEPROM.read(EEPROM_START_ADDRESS + 12 + i * 3);
+    fadeColors[i][1] = EEPROM.read(EEPROM_START_ADDRESS + 12 + i * 3 + 1);
+    fadeColors[i][2] = EEPROM.read(EEPROM_START_ADDRESS + 12 + i * 3 + 2);
+    volumeColors[i][0] = EEPROM.read(EEPROM_START_ADDRESS + 24 + i * 3);
+    volumeColors[i][1] = EEPROM.read(EEPROM_START_ADDRESS + 24 + i * 3 + 1);
+    volumeColors[i][2] = EEPROM.read(EEPROM_START_ADDRESS + 24 + i * 3 + 2);
   }
 
   if (!validData) {
@@ -275,6 +417,12 @@ void loadColorsFromEEPROM()
       colors[i][0] = MAX_BRIGHTNESS;
       colors[i][1] = MAX_BRIGHTNESS;
       colors[i][2] = MAX_BRIGHTNESS;
+      fadeColors[i][0] = MAX_BRIGHTNESS;
+      fadeColors[i][1] = MAX_BRIGHTNESS;
+      fadeColors[i][2] = MAX_BRIGHTNESS;
+      volumeColors[i][0] = 255 - MAX_BRIGHTNESS;
+      volumeColors[i][1] = 255 - MAX_BRIGHTNESS;
+      volumeColors[i][2] = 255 - MAX_BRIGHTNESS;
     }
   }
 }
