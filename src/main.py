@@ -2,7 +2,6 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
 from gui import MacroPadApp
-from serial_manager import SerialManager
 from utils import resource_path  # Import the resource_path function
 
 def load_stylesheet():

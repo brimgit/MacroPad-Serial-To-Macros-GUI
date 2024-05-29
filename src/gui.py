@@ -6,14 +6,16 @@ import keyboard
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel,
                              QTextEdit, QListWidget, QPushButton, QMessageBox,
                              QDialog, QFormLayout, QDialogButtonBox, QComboBox,
-                             QDockWidget, QLineEdit, QSystemTrayIcon, QMenu, QAction)
+                             QDockWidget, QLineEdit, QSystemTrayIcon, QMenu, QAction, QStackedWidget)
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import pyqtSignal, QObject, Qt
 from serial.tools import list_ports
 
 from macro_manager import set_macro, save_macros, reload_macros, delete_macro
-from serial_manager import SerialManager, adjust_volume
+from serial_manager import SerialManager, adjust_volume, list_ports as sp_list_ports
 from utils import resource_path
+
+from arduino_uploader import ArduinoUploader  # Import the ArduinoUploader class
 
 # Check if the platform is Windows
 is_windows = sys.platform.startswith('win')
@@ -34,10 +36,6 @@ logging.basicConfig(
 class GuiUpdater(QObject):
     updateTextSignal = pyqtSignal(str)
     executeMacroSignal = pyqtSignal(str)
-
-from PyQt5.QtWidgets import QDialog, QFormLayout, QComboBox, QPushButton, QDialogButtonBox
-from PyQt5.QtCore import Qt
-from serial.tools import list_ports
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None, default_port='COM20', default_baud='115200'):
@@ -110,6 +108,7 @@ def load_settings():
             return None, None  # Port no longer available
     except FileNotFoundError:
         return None, None  # No settings file found
+
 class MacroPadApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -125,23 +124,26 @@ class MacroPadApp(QMainWindow):
             3: 'vlc.exe',     # Encoder 3 controls VLC Player
             4: 'firefox.exe'  # Encoder 4 controls Firefox
         }
-        
+
         self.initUI()
         self.showSettingsDialog()
         self.load_macros_and_update_list()
-         
+
     def initUI(self):
         self.setWindowTitle('MacroPad Serial Interface')
         self.setGeometry(100, 100, 800, 600)
         self.createSidebar()
         self.setWindowIcon(QIcon(resource_path('Assets/Images/icon.ico')))
-        
-        # System Tray Icon
-        self.tray_icon = QSystemTrayIcon(QIcon(resource_path('Assets/Images/icon.png')), self)
-        self.tray_icon.activated.connect(self.toggle_window)
-        self.create_tray_menu()
 
-        main_layout = QVBoxLayout()
+        # Main widget stack
+        self.stack = QStackedWidget(self)
+        self.setCentralWidget(self.stack)
+
+        # Main interface widget
+        self.main_widget = QWidget()
+        self.stack.addWidget(self.main_widget)
+
+        main_layout = QVBoxLayout(self.main_widget)
         self.statusLabel = QLabel("Ready")
         main_layout.addWidget(self.statusLabel)
 
@@ -168,10 +170,19 @@ class MacroPadApp(QMainWindow):
         self.removeMacroButton.clicked.connect(self.remove_selected_macro)
         main_layout.addWidget(self.removeMacroButton)
 
-        centralWidget = QWidget()
-        centralWidget.setLayout(main_layout)
-        self.setCentralWidget(centralWidget)
-           
+        # Button to open Arduino Uploader
+        self.arduino_button = QPushButton('Open Arduino Uploader', self)
+        self.arduino_button.clicked.connect(self.show_arduino_uploader)
+        main_layout.addWidget(self.arduino_button)
+
+        # Arduino Uploader widget
+        self.arduino_uploader = ArduinoUploader(self)
+        self.arduino_uploader.set_serial_manager(self.serial_manager)
+        self.stack.addWidget(self.arduino_uploader)
+
+    def show_arduino_uploader(self):
+        self.stack.setCurrentWidget(self.arduino_uploader)
+
     def showSettingsDialog(self):
         port, baud_rate = load_settings()
         if port is None or baud_rate is None:
@@ -183,8 +194,7 @@ class MacroPadApp(QMainWindow):
                 sys.exit(0)  # Exit if no settings are selected
 
         self.serial_manager = SerialManager(self.handle_received_data, port, baud_rate)
-    
-
+        self.arduino_uploader.set_serial_manager(self.serial_manager)
 
     def createSidebar(self):
         self.sidebar = QDockWidget("", self)
@@ -279,9 +289,6 @@ class MacroPadApp(QMainWindow):
         item = self.macroList.currentItem()
         if item:
             full_text = item.text()
-            # It's important to extract the full key exactly as it's stored in the macros dictionary.
-            # Assuming your list items are in the format "1: Pressed: Media Control - play/pause",
-            # you would split by ':' and take the first two parts to reconstruct "1: Pressed".
             command_key = ':'.join(full_text.split(':')[:2]).strip()
 
             try:
@@ -372,7 +379,7 @@ class MacroPadApp(QMainWindow):
             print("Received non-UTF-8 data")
         except Exception as e:
             print(f"Error processing received data: {e}")
-                  
+
     def execute_macro(self, command):
         macro = self.MacroPadApp.get(command)
         if macro:
@@ -401,7 +408,7 @@ class MacroPadApp(QMainWindow):
 
     def updateReceivedDataDisplay(self, text):
         self.receivedDataDisplay.append(text)
-            
+
     def create_tray_menu(self):
         # Create tray menu
         self.tray_menu = QMenu()
@@ -431,7 +438,7 @@ class MacroPadApp(QMainWindow):
 
     def closeEvent(self, event):
         reply = QMessageBox.question(self, 'Exit', 'Are you sure you want to exit?',
-                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
             if hasattr(self, 'tray_icon'):  # Check if tray_icon is initialized
                 self.tray_icon.hide()
@@ -439,4 +446,3 @@ class MacroPadApp(QMainWindow):
             QApplication.quit()
         else:
             event.ignore()
-            

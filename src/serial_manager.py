@@ -1,12 +1,17 @@
 import serial
 import threading
 import logging
+from serial.tools import list_ports as sp_list_ports
 
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 from ctypes import cast, POINTER
 from comtypes import CLSCTX_ALL
 
 logging.basicConfig(level=logging.INFO)
+
+def list_ports():
+    ports = sp_list_ports.comports()
+    return [port.device for port in ports]
 
 def adjust_volume(application_name, increase=True):
     print(f"Adjusting volume for {application_name}, increase: {increase}")
