@@ -4,15 +4,15 @@ import json
 import logging
 import keyboard
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel,
-                             QTextEdit, QListWidget, QPushButton, QMessageBox,
+                             QTextEdit, QListWidget, QPushButton, QMessageBox, QColorDialog,
                              QDialog, QFormLayout, QDialogButtonBox, QComboBox,
                              QDockWidget, QLineEdit, QSystemTrayIcon, QMenu, QAction, QStackedWidget)
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtCore import pyqtSignal, QObject, Qt
 from serial.tools import list_ports
 
 from macro_manager import set_macro, save_macros, reload_macros, delete_macro
-from serial_manager import SerialManager, adjust_volume, list_ports as sp_list_ports
+from serial_manager import SerialManager, adjust_volume, get_volume_percentage, list_ports as sp_list_ports
 from utils import resource_path
 
 from arduino_uploader import ArduinoUploader  # Import the ArduinoUploader class
@@ -179,6 +179,27 @@ class MacroPadApp(QMainWindow):
         self.arduino_uploader = ArduinoUploader(self)
         self.arduino_uploader.set_serial_manager(self.serial_manager)
         self.stack.addWidget(self.arduino_uploader)
+
+        # Add buttons for each encoder
+        for i in range(1, 5):
+            button = QPushButton(f"Set Color for Encoder {i}")
+            button.clicked.connect(lambda _, encoder=i: self.open_color_picker(encoder))
+            main_layout.addWidget(button)
+
+        # Label to show the selected color
+        self.color_label = QLabel("Selected Color: None")
+        main_layout.addWidget(self.color_label)
+
+    def open_color_picker(self, encoder):
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.color_label.setText(f"Selected Color: {color.name()}")
+            r = color.red()
+            g = color.green()
+            b = color.blue()
+            color_command = f"{encoder}:color({r},{g},{b})"
+            self.serial_manager.send_data(color_command.encode('utf-8'))
+            print(f"Sent to serial: {color_command}")
 
     def show_arduino_uploader(self):
         self.stack.setCurrentWidget(self.arduino_uploader)
@@ -362,9 +383,14 @@ class MacroPadApp(QMainWindow):
                 if app_name:
                     print(f"Handling volume adjustment for {app_name} with command {command}")
                     if command == '+':
-                        adjust_volume(app_name, increase=True)
+                        new_volume = adjust_volume(app_name, increase=True)
                     elif command == '-':
-                        adjust_volume(app_name, increase=False)
+                        new_volume = adjust_volume(app_name, increase=False)
+                    
+                    if new_volume is not None:
+                        volume_command = f"{encoder_id}:{int(new_volume)}"
+                        self.serial_manager.send_data(volume_command.encode('utf-8'))
+                        print(f"Sent to serial: {volume_command}")
                 else:
                     print(f"No application mapped to encoder {encoder_id}")
 
