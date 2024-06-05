@@ -14,32 +14,27 @@ def list_ports():
     return [port.device for port in ports]
 
 def adjust_volume(application_name, increase=True):
-    print(f"Adjusting volume for {application_name}, increase: {increase}")
     sessions = AudioUtilities.GetAllSessions()
     for session in sessions:
         if session.Process and session.Process.name() == application_name:
             volume = session.SimpleAudioVolume
             current_volume = volume.GetMasterVolume()
-            print(f"Current volume of {application_name}: {current_volume}")
             if increase:
                 new_volume = min(current_volume + 0.1, 1.0)
             else:
                 new_volume = max(current_volume - 0.1, 0.0)
             volume.SetMasterVolume(new_volume, None)
-            print(f"New volume of {application_name}: {new_volume}")
-            return new_volume * 100
-    else:
-        print(f"No active session found for {application_name}")
-        return None
-
-def get_volume_percentage(application_name):
-    sessions = AudioUtilities.GetAllSessions()
-    for session in sessions:
-        if session.Process and session.Process.name() == application_name:
-            volume = session.SimpleAudioVolume
-            current_volume = volume.GetMasterVolume()
-            return current_volume * 100
+            return new_volume * 100  # Return volume as percentage
     return None
+
+class VolumeManager:
+    def get_available_processes(self):
+        sessions = AudioUtilities.GetAllSessions()
+        processes = set()
+        for session in sessions:
+            if session.Process:
+                processes.add(session.Process.name())
+        return list(processes)
 
 class SerialManager:
     def __init__(self, data_callback, port='COM20', baud_rate=115200):
@@ -49,12 +44,13 @@ class SerialManager:
         self.serial_port = None
         self.running = False
         self.thread = None
+        self.volume_manager = VolumeManager()  # Initialize VolumeManager
         self.start()
 
     def start(self):
         self.stop()  # Ensure any existing connection and thread are stopped before starting new
         try:
-            self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=0.01)
+            self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=1)
             self.running = True
             self.thread = threading.Thread(target=self._read_from_port, daemon=True)
             self.thread.start()
@@ -73,8 +69,7 @@ class SerialManager:
         while self.running:
             try:
                 if self.serial_port.in_waiting > 0:
-                    data = self.serial_port.readline()
-                    print(f"Raw data read: {data}")  # Debug print to check raw data
+                    data = self.serial_port.readline().decode('utf-8').strip()
                     if data:
                         self.data_callback(data)
             except serial.SerialException as e:
@@ -87,12 +82,5 @@ class SerialManager:
         self.start()  # Restart the connection with new settings
 
     def send_data(self, data):
-        """Send data to the serial port."""
         if self.serial_port and self.serial_port.is_open:
-            try:
-                self.serial_port.write(data)
-                logging.info(f"Sent data: {data}")
-            except serial.SerialException as e:
-                logging.error(f"Error sending data: {e}")
-        else:
-            logging.warning("Serial port is not open.")
+            self.serial_port.write(data)

@@ -8,11 +8,11 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, QL
                              QDialog, QFormLayout, QDialogButtonBox, QComboBox,
                              QDockWidget, QLineEdit, QSystemTrayIcon, QMenu, QAction, QStackedWidget)
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtCore import pyqtSignal, QObject, Qt
+from PyQt5.QtCore import pyqtSignal, QObject, Qt, QThread, pyqtSlot
 from serial.tools import list_ports
 
 from macro_manager import set_macro, save_macros, reload_macros, delete_macro
-from serial_manager import SerialManager, adjust_volume, get_volume_percentage, list_ports as sp_list_ports
+from serial_manager import SerialManager, list_ports as sp_list_ports
 from utils import resource_path
 
 from arduino_uploader import ArduinoUploader  # Import the ArduinoUploader class
@@ -109,6 +109,21 @@ def load_settings():
     except FileNotFoundError:
         return None, None  # No settings file found
 
+class VolumeThread(QThread):
+    volume_changed = pyqtSignal(int, int)
+
+    def __init__(self, app_name, increase, encoder_id, volume_manager, parent=None):
+        super().__init__(parent)
+        self.app_name = app_name
+        self.increase = increase
+        self.encoder_id = encoder_id
+        self.volume_manager = volume_manager
+
+    def run(self):
+        new_volume = self.volume_manager.adjust_volume(self.app_name, self.increase)
+        if new_volume is not None:
+            self.volume_changed.emit(self.encoder_id, int(new_volume))
+
 class MacroPadApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -118,16 +133,13 @@ class MacroPadApp(QMainWindow):
         self.guiUpdater.updateTextSignal.connect(self.updateReceivedDataDisplay)
         self.guiUpdater.executeMacroSignal.connect(self.execute_macro)
 
-        self.encoder_app_map = {
-            1: 'Discord.exe',  # Example: Encoder 1 controls Discord
-            2: 'Spotify.exe', # Encoder 2 controls Spotify
-            3: 'vlc.exe',     # Encoder 3 controls VLC Player
-            4: 'firefox.exe'  # Encoder 4 controls Firefox
-        }
+        self.encoder_dropdowns = {}  # To store dropdowns for each encoder
+        self.threads = []  # Keep track of running threads
 
         self.initUI()
-        self.showSettingsDialog()
+        self.showSettingsDialog()  # Move this call before refreshing dropdowns
         self.load_macros_and_update_list()
+        self.refresh_process_dropdowns()  # Ensure this is called after initializing serial_manager
 
     def initUI(self):
         self.setWindowTitle('MacroPad Serial Interface')
@@ -180,26 +192,36 @@ class MacroPadApp(QMainWindow):
         self.arduino_uploader.set_serial_manager(self.serial_manager)
         self.stack.addWidget(self.arduino_uploader)
 
-        # Add buttons for each encoder
+        # Add dropdowns and color picker buttons for each encoder
         for i in range(1, 5):
-            button = QPushButton(f"Set Color for Encoder {i}")
-            button.clicked.connect(lambda _, encoder=i: self.open_color_picker(encoder))
-            main_layout.addWidget(button)
+            layout = QVBoxLayout()
+            label = QLabel(f"Encoder {i} Program:")
+            dropdown = QComboBox()
+            color_button = QPushButton(f"Set Color for Encoder {i}")
+            color_button.clicked.connect(lambda _, encoder=i: self.open_color_picker(encoder))
+            layout.addWidget(label)
+            layout.addWidget(dropdown)
+            layout.addWidget(color_button)
+            main_layout.addLayout(layout)
+            self.encoder_dropdowns[i] = dropdown
 
         # Label to show the selected color
         self.color_label = QLabel("Selected Color: None")
         main_layout.addWidget(self.color_label)
 
+    def refresh_process_dropdowns(self):
+        available_processes = self.serial_manager.volume_manager.get_available_processes()
+        for dropdown in self.encoder_dropdowns.values():
+            dropdown.clear()
+            dropdown.addItems(available_processes)
+
     def open_color_picker(self, encoder):
         color = QColorDialog.getColor()
         if color.isValid():
             self.color_label.setText(f"Selected Color: {color.name()}")
-            r = color.red()
-            g = color.green()
-            b = color.blue()
+            r, g, b = color.red(), color.green(), color.blue()
             color_command = f"{encoder}:color({r},{g},{b})"
             self.serial_manager.send_data(color_command.encode('utf-8'))
-            print(f"Sent to serial: {color_command}")
 
     def show_arduino_uploader(self):
         self.stack.setCurrentWidget(self.arduino_uploader)
@@ -247,7 +269,6 @@ class MacroPadApp(QMainWindow):
             with open(resource_path('Data/style.css'), 'r') as f:
                 stylesheet = f.read()
                 self.setStyleSheet(stylesheet)
-                print("Stylesheet loaded successfully.")
         except Exception as e:
             print(f"Failed to load stylesheet: {e}")
 
@@ -370,33 +391,23 @@ class MacroPadApp(QMainWindow):
 
     def handle_received_data(self, data):
         try:
-            decoded_data = data.decode('utf-8').strip()
-            print(f"Received data: {decoded_data}")  # Debug print to confirm data reception
-
+            decoded_data = data.strip()  # Remove any leading/trailing whitespace
             # Debugging data processing logic
             encoder_cmd = decoded_data.split(': ')
             if len(encoder_cmd) == 2 and encoder_cmd[0].startswith('Enc'):
                 encoder_id = int(encoder_cmd[0][3:])  # Extract encoder number
                 command = encoder_cmd[1].strip()  # Ensure command is stripped of whitespace
-                app_name = self.encoder_app_map.get(encoder_id)  # Retrieve mapped application name
+                app_name = self.encoder_dropdowns[encoder_id].currentText()  # Get the selected application for the encoder
 
                 if app_name:
-                    print(f"Handling volume adjustment for {app_name} with command {command}")
-                    if command == '+':
-                        new_volume = adjust_volume(app_name, increase=True)
-                    elif command == '-':
-                        new_volume = adjust_volume(app_name, increase=False)
-                    
-                    if new_volume is not None:
-                        volume_command = f"{encoder_id}:{int(new_volume)}"
-                        self.serial_manager.send_data(volume_command.encode('utf-8'))
-                        print(f"Sent to serial: {volume_command}")
-                else:
-                    print(f"No application mapped to encoder {encoder_id}")
-
+                    increase = command == '+'
+                    volume_thread = VolumeThread(app_name, increase, encoder_id, self.serial_manager.volume_manager)
+                    volume_thread.volume_changed.connect(self.send_volume_to_serial)
+                    volume_thread.start()
+                    self.threads.append(volume_thread)
+                    volume_thread.finished.connect(lambda: self.threads.remove(volume_thread))
             else:
                 # If not an encoder command, handle as a regular macro or display update
-                print("Data received does not match encoder patterns.")
                 self.guiUpdater.updateTextSignal.emit(decoded_data)
                 self.decodedVar = decoded_data
                 self.execute_macro(decoded_data)
@@ -405,6 +416,11 @@ class MacroPadApp(QMainWindow):
             print("Received non-UTF-8 data")
         except Exception as e:
             print(f"Error processing received data: {e}")
+
+    @pyqtSlot(int, int)
+    def send_volume_to_serial(self, encoder_id, volume_percentage):
+        volume_command = f"{encoder_id}:{volume_percentage}"
+        self.serial_manager.send_data(volume_command.encode('utf-8'))
 
     def execute_macro(self, command):
         macro = self.MacroPadApp.get(command)
