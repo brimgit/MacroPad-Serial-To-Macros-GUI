@@ -391,7 +391,7 @@ class MacroPadApp(QMainWindow):
 
     def handle_received_data(self, data):
         try:
-            decoded_data = data.strip()  # Remove any leading/trailing whitespace
+            decoded_data = data.decode('utf-8').strip()  # Decode and strip any leading/trailing whitespace
             # Debugging data processing logic
             encoder_cmd = decoded_data.split(': ')
             if len(encoder_cmd) == 2 and encoder_cmd[0].startswith('Enc'):

@@ -2,7 +2,7 @@ import serial
 import threading
 import logging
 from serial.tools import list_ports as sp_list_ports
-from volume_manager import VolumeManager  # Import the VolumeManager
+from volume_manager import VolumeManager
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,7 +18,7 @@ class SerialManager:
         self.serial_port = None
         self.running = False
         self.thread = None
-        self.volume_manager = VolumeManager()  # Initialize VolumeManager
+        self.volume_manager = VolumeManager()
         self.start()
 
     def start(self):
@@ -43,7 +43,7 @@ class SerialManager:
         while self.running:
             try:
                 if self.serial_port.in_waiting > 0:
-                    data = self.serial_port.readline().decode('utf-8').strip()
+                    data = self.serial_port.readline()
                     if data:
                         self.data_callback(data)
             except serial.SerialException as e:
