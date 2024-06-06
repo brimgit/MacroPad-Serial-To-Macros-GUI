@@ -1,1 +1,6 @@
-{}
+{
+    "1: Pressed": {
+        "type": "Media Control",
+        "action": "play/pause"
+    }
+}
