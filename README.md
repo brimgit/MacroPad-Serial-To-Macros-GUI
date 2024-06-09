@@ -27,6 +27,8 @@ Modify the source code as desired.
 Test your changes thoroughly.
 Submit a pull request with your changes for review.
 
+The pcb and schematic files are from KiCad.
+If you want to create the pcb I added the gerber files too so you can use those with your favorite pcb manufacturer.
 ## License
 This project is licensed under the [MIT License](https://opensource.org/license/MIT)
 
