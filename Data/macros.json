@@ -10,9 +10,5 @@
     "KP:A": {
         "type": "Mute App",
         "action": "Toggle mute for assigned app"
-    },
-    "KP:A:HOLD": {
-        "type": "Keyboard Key",
-        "action": "a"
     }
 }

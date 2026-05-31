@@ -1,1 +1,1 @@
-{"port": "COM7", "baud_rate": "115200", "brightness_pct": 5, "timeout_secs": 60}
+{"port": "COM7", "baud_rate": "115200", "brightness_pct": 5, "enc_led_timeout_secs": 2, "effect_speed_ms": 5}

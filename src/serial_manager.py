@@ -15,8 +15,10 @@ def list_ports():
 class SerialManager:
     _RECONNECT_DELAY = 3.0
 
-    def __init__(self, data_callback, port='COM20', baud_rate=115200):
+    def __init__(self, data_callback, port='COM20', baud_rate=115200,
+                 connected_callback=None):
         self.data_callback = data_callback
+        self.connected_callback = connected_callback
         self.port = port
         self.baud_rate = baud_rate
         self.serial_port = None
@@ -62,9 +64,11 @@ class SerialManager:
                     self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=1)
                     self._connected = True
                     logging.info(f'Connected to {self.port} @ {self.baud_rate}')
+                    if self.connected_callback:
+                        self.connected_callback(True)
                 except serial.SerialException as e:
                     logging.warning(f'Cannot open {self.port}: {e}')
-                    self._stop_event.wait(self._RECONNECT_DELAY)  # interruptible
+                    self._stop_event.wait(self._RECONNECT_DELAY)
                     continue
 
             try:
@@ -79,6 +83,8 @@ class SerialManager:
             except serial.SerialException as e:
                 logging.warning(f'Serial read error: {e}')
                 self._close_port()
+                if self.connected_callback:
+                    self.connected_callback(False)
                 self._stop_event.wait(self._RECONNECT_DELAY)
 
     def update_settings(self, port, baud_rate):

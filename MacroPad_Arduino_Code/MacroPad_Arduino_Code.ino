@@ -49,6 +49,12 @@ Encoder enc2(26, 25, SINGLE, 250);
 Encoder enc3(13, 12, SINGLE, 250);
 unsigned long encoderTimer = 0;
 int lastTicks[4] = { 0, 0, 0, 0 };
+unsigned long encoderActivityTime[4] = { 0, 0, 0, 0 };
+unsigned long encoderLedTimeoutMs = 2000UL;
+uint8_t stripEffect[4]  = { 0, 0, 0, 0 };  // 0=off 1=breathe 2=wave 3=rainbow 4=chase 5=colorcycle 6=sparkle
+float   effectPhase[4]  = { 0.0f, 0.0f, 0.0f, 0.0f };
+unsigned long effectTimer = 0;
+unsigned long effectInterval = 10;
 
 // ─── Keypad ───────────────────────────────────────────────────────────────────
 const byte ROWS = 3;
@@ -63,19 +69,6 @@ char keys[ROWS][COLS] = {
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 unsigned long keyPressTimes[LIST_MAX];
 
-// ─── LED timeout ──────────────────────────────────────────────────────────────
-unsigned long lastActivityTime = 0;
-unsigned long timeoutMs        = 60000UL;  // default 60 s, 0 = disabled
-bool          ledsOff          = false;
-
-void resetActivity() {
-  lastActivityTime = millis();
-  if (ledsOff) {
-    ledsOff = false;
-    for (int i = 0; i < 4; i++)
-      lightUpPercentage(i, stripsData[i].percentage);
-  }
-}
 
 // ─── setup ────────────────────────────────────────────────────────────────────
 void setup() {
@@ -96,10 +89,10 @@ void setup() {
   loadColorsFromEEPROM();
   startupSequence();
 
-  // Restore saved LED state
-  for (int i = 0; i < 4; i++) {
-    lightUpPercentage(i, stripsData[i].percentage);
-  }
+  // Start with all strips off; each lights up when its encoder is turned
+  for (int i = 0; i < 4; i++)
+    fill_solid(strips[i], NUMPIXELS, CRGB::Black);
+  FastLED.show();
 }
 
 // ─── Startup: all strips flash red×3, green×3, blue×3 ────────────────────────
@@ -148,33 +141,126 @@ void loop() {
     encoderTimer = millis();
   }
 
+  // Turn off (or start breathing) each strip after encoder inactivity
+  for (int i = 0; i < 4; i++) {
+    if (encoderActivityTime[i] > 0 &&
+        (millis() - encoderActivityTime[i] > encoderLedTimeoutMs)) {
+      encoderActivityTime[i] = 0;
+      if (stripEffect[i] == 0) {
+        fill_solid(strips[i], NUMPIXELS, CRGB::Black);
+        FastLED.show();
+      }
+      // If an effect is active, updateEffects() will animate from here
+    }
+  }
+
+  updateEffects();
+
   if (Serial.available() > 0) {
     String input = Serial.readStringUntil('\n');
     input.trim();
     if (input.length() == 0) return;
-    resetActivity();
     handleLEDCommand(input);
   }
+}
 
-  // LED timeout: turn off strips after inactivity
-  if (timeoutMs > 0 && !ledsOff && (millis() - lastActivityTime > timeoutMs)) {
-    ledsOff = true;
-    for (int s = 0; s < 4; s++)
-      fill_solid(strips[s], NUMPIXELS, CRGB::Black);
-    FastLED.show();
+// ─── Idle LED effects (runs at ~60 fps) ──────────────────────────────────────
+void updateEffects() {
+  if ((millis() - effectTimer) < effectInterval) return;
+  effectTimer = millis();
+
+  bool changed = false;
+  for (int i = 0; i < 4; i++) {
+    if (stripEffect[i] == 0 || encoderActivityTime[i] > 0) continue;
+    Color c = stripsData[i].color;
+    float &ph = effectPhase[i];
+
+    switch (stripEffect[i]) {
+
+      case 1: { // Breathe — smootherstep curve, stays bright longer, no dark snap
+        float t = (sinf(ph) + 1.0f) * 0.5f;
+        t = t * t * t * (t * (6.0f * t - 15.0f) + 10.0f);  // smootherstep
+        float br = 0.13f + t * 0.70f;                        // 13-83%, avoids quantisation at dark end
+        for (int j = 0; j < NUMPIXELS; j++)
+          strips[i][j] = CRGB((uint8_t)(c.r*br),(uint8_t)(c.g*br),(uint8_t)(c.b*br));
+        ph += 0.012f;
+        break;
+      }
+      case 2: { // Wave — ripple across strip
+        for (int j = 0; j < NUMPIXELS; j++) {
+          float angle = ph + (float)j * (6.2832f / NUMPIXELS);
+          float br = (sinf(angle) + 1.0f) * 0.5f;
+          br = 0.04f + br * 0.78f;
+          strips[i][j] = CRGB((uint8_t)(c.r*br),(uint8_t)(c.g*br),(uint8_t)(c.b*br));
+        }
+        ph += 0.034f;
+        break;
+      }
+      case 3: { // Rainbow — hue band scrolls
+        uint8_t hue = (uint8_t)ph;
+        for (int j = 0; j < NUMPIXELS; j++) {
+          CRGB rgb;
+          hsv2rgb_rainbow(CHSV(hue + (j * 256 / NUMPIXELS), 240, 200), rgb);
+          strips[i][j] = rgb;
+        }
+        ph += 0.22f;
+        if (ph >= 256.0f) ph -= 256.0f;
+        break;
+      }
+      case 4: { // Chase — glowing dot with fade trail
+        for (int j = 0; j < NUMPIXELS; j++)
+          strips[i][j].fadeToBlackBy(55);
+        int pos = (int)ph % NUMPIXELS;
+        strips[i][pos]              = CRGB(c.r, c.g, c.b);
+        strips[i][(pos+1)%NUMPIXELS] = CRGB(c.r*0.5f, c.g*0.5f, c.b*0.5f);
+        ph += 0.11f;
+        if (ph >= NUMPIXELS) ph -= NUMPIXELS;
+        break;
+      }
+      case 5: { // Color Cycle — all LEDs same interpolated color, glassy smooth
+        uint8_t h0 = (uint8_t)ph;
+        float   t  = ph - (float)h0;
+        CRGB c0, c1;
+        hsv2rgb_rainbow(CHSV(h0,     255, 210), c0);
+        hsv2rgb_rainbow(CHSV(h0 + 1, 255, 210), c1);
+        CRGB blended;
+        blended.r = (uint8_t)(c0.r + (c1.r - c0.r) * t);
+        blended.g = (uint8_t)(c0.g + (c1.g - c0.g) * t);
+        blended.b = (uint8_t)(c0.b + (c1.b - c0.b) * t);
+        fill_solid(strips[i], NUMPIXELS, blended);
+        ph += 0.063f;
+        if (ph >= 256.0f) ph -= 256.0f;
+        break;
+      }
+      case 6: { // Sparkle — random twinkles in strip color
+        for (int j = 0; j < NUMPIXELS; j++)
+          strips[i][j].fadeToBlackBy(35);
+        if (random8() < 70) {
+          uint8_t pos = random8(NUMPIXELS);
+          uint8_t br  = random8(160, 255);
+          strips[i][pos] = CRGB((uint8_t)(c.r*br/255),(uint8_t)(c.g*br/255),(uint8_t)(c.b*br/255));
+        }
+        break;
+      }
+    }
+
+    if (ph > 6.2832f && stripEffect[i] <= 2) ph -= 6.2832f;
+    changed = true;
   }
+  if (changed) FastLED.show();
 }
 
 // ─── Encoder output: E:N:+  or  E:N:-  (N = 0-3) ────────────────────────────
 void checkEncoder(Encoder &enc, int &last, int idx) {
   int cur = enc.getTicks();
   if (cur != last) {
-    resetActivity();
     Serial.print("E:");
     Serial.print(idx);
     Serial.print(":");
     Serial.println(cur > last ? "+" : "-");
     last = cur;
+    encoderActivityTime[idx] = millis();
+    lightUpPercentage(idx, stripsData[idx].percentage);
   }
 }
 
@@ -187,7 +273,6 @@ void handleKeypad() {
       switch (keypad.key[i].kstate) {
         case PRESSED:
           keyPressTimes[i] = millis();
-          resetActivity();
           Serial.print("KP:");
           Serial.print(k);
           Serial.println(":DOWN");
@@ -222,10 +307,31 @@ void handleLEDCommand(String &input) {
     return;
   }
 
-  if (input.startsWith("TIMEOUT:")) {
-    unsigned long secs = (unsigned long)input.substring(8).toInt();
-    timeoutMs = secs * 1000UL;
-    lastActivityTime = millis();  // reset timer on new setting
+  if (input.startsWith("ENC_TIMEOUT:")) {
+    unsigned long secs = (unsigned long)input.substring(12).toInt();
+    encoderLedTimeoutMs = secs * 1000UL;
+    return;
+  }
+
+  if (input.startsWith("EFFECT_SPEED:")) {
+    unsigned long ms = (unsigned long)input.substring(13).toInt();
+    if (ms >= 1 && ms <= 200) effectInterval = ms;
+    return;
+  }
+
+  if (input.startsWith("EFFECT:")) {
+    int n, val;
+    if (sscanf(input.c_str(), "EFFECT:%d:%d", &n, &val) == 2) {
+      int idx = n - 1;
+      if (idx >= 0 && idx < 4) {
+        stripEffect[idx] = (uint8_t)constrain(val, 0, 6);
+        effectPhase[idx] = 0.0f;
+        if (stripEffect[idx] == 0 && encoderActivityTime[idx] == 0) {
+          fill_solid(strips[idx], NUMPIXELS, CRGB::Black);
+          FastLED.show();
+        }
+      }
+    }
     return;
   }
 
@@ -270,6 +376,7 @@ void handleLEDCommand(String &input) {
 
 // ─── LED rendering ────────────────────────────────────────────────────────────
 void lightUpPercentage(int idx, int pct) {
+  encoderActivityTime[idx] = millis();  // reset timeout whenever a strip is lit
   int fullLeds          = pct / 10;
   int partialBrightness = (pct % 10) * (MAX_BRIGHTNESS / 10);
 

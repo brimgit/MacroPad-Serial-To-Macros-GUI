@@ -9,7 +9,8 @@ from PyQt5.QtGui import QPainter, QColor, QBrush, QFont
 import theme
 
 
-MACRO_TYPES = ['Keyboard Key', 'Media Control', 'Function Key', 'Modifier Key', 'Mute App', 'Recorded']
+MACRO_TYPES = ['Keyboard Key', 'Media Control', 'Function Key', 'Modifier Key',
+               'Type Text', 'Mute App', 'Recorded']
 
 MACRO_ACTIONS = {
     'Keyboard Key': (
@@ -32,6 +33,7 @@ MACRO_ACTIONS = {
         'ctrl+s', 'ctrl+a', 'ctrl+shift+esc',
         'alt+f4', 'alt+tab', 'win+d', 'win+l', 'win+e',
     ],
+    'Type Text': [],
     'Mute App': ['Toggle mute for assigned app'],
     'Recorded': [],
 }
@@ -537,8 +539,8 @@ class MacroAssignDialog(QDialog):
         header_row.addStretch()
         root.addLayout(header_row)
 
-        self._press_type, self._press_action, self._press_recorder = self._add_section(root, 'Press', 'press')
-        self._hold_type, self._hold_action, self._hold_recorder = self._add_section(root, 'Hold', 'hold')
+        self._press_type, self._press_action, self._press_recorder, self._press_text = self._add_section(root, 'Press', 'press')
+        self._hold_type, self._hold_action, self._hold_recorder, self._hold_text = self._add_section(root, 'Hold', 'hold')
 
         btns = QHBoxLayout()
         btns.addStretch()
@@ -613,31 +615,48 @@ class MacroAssignDialog(QDialog):
         action_inner.addWidget(action_lbl)
         action_inner.addWidget(action_combo, 1)
 
+        from PyQt5.QtWidgets import QLineEdit
+        text_input = QLineEdit()
+        text_input.setPlaceholderText('Text to type...')
+        text_input.setVisible(False)
+        text_input.setStyleSheet(f'''
+            QLineEdit {{
+                background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER_LIGHT};
+                border-radius: 8px; color: {theme.TEXT}; padding: 6px 10px;
+            }}
+            QLineEdit:focus {{ border-color: {theme.ACCENT}; }}
+        ''')
+
         recorder = KeyRecorderWidget()
         recorder.setVisible(False)
+
+        def _on_type_changed(t, ac=action_combo, aw=action_container,
+                             rw=recorder, tw=text_input):
+            aw.setVisible(t not in ('Recorded', 'Type Text'))
+            rw.setVisible(t == 'Recorded')
+            tw.setVisible(t == 'Type Text')
 
         type_combo.currentTextChanged.connect(
             lambda t, ac=action_combo: self._refresh_actions(t, ac)
         )
-        type_combo.currentTextChanged.connect(
-            lambda t, aw=action_container, rw=recorder: (
-                aw.setVisible(t != 'Recorded'),
-                rw.setVisible(t == 'Recorded'),
-            )
-        )
+        type_combo.currentTextChanged.connect(_on_type_changed)
         type_combo.currentTextChanged.connect(
             lambda _: self._unmark_cleared(prefix)
         )
         action_combo.currentTextChanged.connect(
             lambda _: self._unmark_cleared(prefix)
         )
+        text_input.textChanged.connect(
+            lambda _: self._unmark_cleared(prefix)
+        )
 
         layout.addLayout(type_row)
         layout.addWidget(action_container)
+        layout.addWidget(text_input)
         layout.addWidget(recorder)
         parent_layout.addWidget(frame)
 
-        return type_combo, action_combo, recorder
+        return type_combo, action_combo, recorder, text_input
 
     def _refresh_actions(self, action_type, combo):
         combo.blockSignals(True)
@@ -672,9 +691,9 @@ class MacroAssignDialog(QDialog):
             self._hold_recorder.clear()
 
     def _populate(self, press_data, hold_data):
-        for data, type_combo, action_combo, recorder in [
-            (press_data, self._press_type, self._press_action, self._press_recorder),
-            (hold_data, self._hold_type, self._hold_action, self._hold_recorder),
+        for data, type_combo, action_combo, recorder, text_input in [
+            (press_data, self._press_type, self._press_action, self._press_recorder, self._press_text),
+            (hold_data, self._hold_type, self._hold_action, self._hold_recorder, self._hold_text),
         ]:
             if not data:
                 continue
@@ -683,6 +702,8 @@ class MacroAssignDialog(QDialog):
                 type_combo.setCurrentText(t)
             if t == 'Recorded':
                 recorder.set_recorded_json(data.get('action', ''))
+            elif t == 'Type Text':
+                text_input.setText(data.get('action', ''))
             else:
                 self._refresh_actions(t, action_combo)
                 a = data.get('action', '')
@@ -697,6 +718,9 @@ class MacroAssignDialog(QDialog):
             if press_type == 'Recorded':
                 j = self._press_recorder.get_recorded_json()
                 self._press_result = {'type': press_type, 'action': j} if j else None
+            elif press_type == 'Type Text':
+                t = self._press_text.text()
+                self._press_result = {'type': press_type, 'action': t} if t else None
             else:
                 self._press_result = {'type': press_type, 'action': self._press_action.currentText()}
 
@@ -707,6 +731,9 @@ class MacroAssignDialog(QDialog):
             if hold_type == 'Recorded':
                 j = self._hold_recorder.get_recorded_json()
                 self._hold_result = {'type': hold_type, 'action': j} if j else None
+            elif hold_type == 'Type Text':
+                t = self._hold_text.text()
+                self._hold_result = {'type': hold_type, 'action': t} if t else None
             else:
                 self._hold_result = {'type': hold_type, 'action': self._hold_action.currentText()}
 
@@ -724,7 +751,8 @@ class MacroAssignDialog(QDialog):
 class EncoderCard(QFrame):
     color_command = pyqtSignal(str)
     app_refresh_requested = pyqtSignal(int)
-    button_macro_requested = pyqtSignal(int)   # encoder_id (0-indexed)
+    button_macro_requested = pyqtSignal(int)
+    app_changed = pyqtSignal(int, str)          # encoder_id, app_name
 
     _BTN_LABELS = ['A', 'B', 'C', 'D']
 
@@ -804,10 +832,17 @@ class EncoderCard(QFrame):
         header_row.addStretch()
         layout.addLayout(header_row)
 
-        # LED strip preview
+        # LED strip preview + volume %
+        led_row = QHBoxLayout()
         self._led = LEDPreview()
         self._led.set_state(self._r, self._g, self._b, self._mode, self._percentage)
-        layout.addWidget(self._led)
+        self._pct_lbl = QLabel('-- %')
+        self._pct_lbl.setFixedWidth(36)
+        self._pct_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._pct_lbl.setStyleSheet(f'font-size: 11px; color: {theme.ACCENT}; font-weight: 600;')
+        led_row.addWidget(self._led, 1)
+        led_row.addWidget(self._pct_lbl)
+        layout.addLayout(led_row)
 
         # Mode selector
         mode_row = QHBoxLayout()
@@ -887,6 +922,17 @@ class EncoderCard(QFrame):
         blend_row.addWidget(self._blend_val_lbl)
         fade_inner.addLayout(blend_row)
         layout.addWidget(self._fade_widget)
+
+        # Idle animation
+        idle_row = QHBoxLayout()
+        idle_lbl = QLabel('Idle')
+        idle_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;')
+        self._idle_combo = QComboBox()
+        self._idle_combo.addItems(['Off', 'Breathe', 'Wave', 'Rainbow', 'Chase', 'Color Cycle', 'Sparkle'])
+        self._idle_combo.currentTextChanged.connect(self._on_idle_changed)
+        idle_row.addWidget(idle_lbl)
+        idle_row.addWidget(self._idle_combo, 1)
+        layout.addLayout(idle_row)
 
         # Volume app selector — always visible
         app_row = QHBoxLayout()
@@ -1023,6 +1069,7 @@ class EncoderCard(QFrame):
 
     def _on_app_changed(self, app_name):
         self._selected_app = app_name
+        self.app_changed.emit(self.encoder_id, app_name)
 
     def populate_apps(self, apps, restore=None):
         self._app_combo.blockSignals(True)
@@ -1037,8 +1084,17 @@ class EncoderCard(QFrame):
     def get_selected_app(self):
         return self._app_combo.currentText()
 
+    _EFFECT_MAP = {'Off': 0, 'Breathe': 1, 'Wave': 2, 'Rainbow': 3,
+                   'Chase': 4, 'Color Cycle': 5, 'Sparkle': 6}
+
+    def _on_idle_changed(self, mode):
+        n = self.encoder_id + 1
+        val = self._EFFECT_MAP.get(mode, 0)
+        self.color_command.emit(f'EFFECT:{n}:{val}')
+
     def set_percentage(self, pct):
         self._percentage = pct
+        self._pct_lbl.setText(f'{pct}%' if pct >= 0 else '-- %')
         self._update_led_preview()
 
     def set_button_macros(self, press_data, hold_data):
@@ -1069,6 +1125,62 @@ class EncoderCard(QFrame):
 
     def get_mode(self):
         return self._mode
+
+    def get_state(self):
+        return {
+            'app': self._selected_app,
+            'mode': self._mode,
+            'color': [self._r, self._g, self._b],
+            'color2': [self._r2, self._g2, self._b2],
+            'blend_start': self._blend_start,
+            'effect': self._idle_combo.currentText(),
+        }
+
+    def restore_state(self, state):
+        if not state:
+            return
+        self._mode = state.get('mode', 'default')
+        c = state.get('color', [6, 182, 212])
+        self._r, self._g, self._b = c[0], c[1], c[2]
+        c2 = state.get('color2', [255, 100, 0])
+        self._r2, self._g2, self._b2 = c2[0], c2[1], c2[2]
+        self._blend_start = state.get('blend_start', 0)
+        self._selected_app = state.get('app', '')
+
+        self._mode_combo.blockSignals(True)
+        self._mode_combo.setCurrentText(self._mode.capitalize())
+        self._mode_combo.blockSignals(False)
+
+        is_default = self._mode == 'default'
+        is_fade = self._mode == 'fade'
+        self._color_row.setVisible(not is_default)
+        self._arrow_lbl.setVisible(is_fade)
+        self._color2_btn.setVisible(is_fade)
+        self._fade_widget.setVisible(is_fade)
+
+        self._refresh_color_btn()
+        self._refresh_color2_btn()
+
+        self._blend_slider.blockSignals(True)
+        self._blend_slider.setValue(self._blend_start)
+        self._blend_val_lbl.setText(f'{self._blend_start}%')
+        self._blend_slider.blockSignals(False)
+
+        self._update_led_preview()
+        self._emit_color_cmd()
+
+        # support old 'breathe' bool key as well as new 'effect' string
+        effect = state.get('effect') or ('Breathe' if state.get('breathe') else 'Off')
+        self._idle_combo.blockSignals(True)
+        self._idle_combo.setCurrentText(effect)
+        self._idle_combo.blockSignals(False)
+        self._on_idle_changed(effect)   # push EFFECT command to Arduino
+
+        self._app_combo.blockSignals(True)
+        idx = self._app_combo.findText(self._selected_app)
+        if idx >= 0:
+            self._app_combo.setCurrentIndex(idx)
+        self._app_combo.blockSignals(False)
 
     def get_color_command(self):
         """Returns the full Arduino colour command for this strip (1-indexed)."""

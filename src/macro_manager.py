@@ -61,7 +61,9 @@ def execute_macro(command):
         elif macro["type"] == "Function Key":
             keyboard.send(macro["action"])  # Function keys treated similarly
         elif macro["type"] == "Modifier Key":
-            keyboard.press_and_release(macro["action"])  # Press and release for modifiers
+            keyboard.press_and_release(macro["action"])
+        elif macro["type"] == "Type Text":
+            keyboard.write(macro["action"])
         elif macro["type"] == "Recorded":
             try:
                 events_data = json.loads(macro["action"])

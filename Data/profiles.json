@@ -1,0 +1,152 @@
+{
+  "active": "Default",
+  "profiles": {
+    "Default": {
+      "macros": {
+        "1: Pressed": {
+          "type": "Media Control",
+          "action": "play/pause"
+        },
+        "1: Held": {
+          "type": "Keyboard Key",
+          "action": "a"
+        },
+        "KP:A": {
+          "type": "Mute App",
+          "action": "Toggle mute for assigned app"
+        }
+      },
+      "encoders": [
+        {
+          "app": "Discord.exe",
+          "mode": "solid",
+          "color": [
+            0,
+            200,
+            0
+          ],
+          "color2": [
+            200,
+            0,
+            0
+          ],
+          "blend_start": 0,
+          "effect": "Wave"
+        },
+        {
+          "app": "steam.exe",
+          "mode": "default",
+          "color": [
+            6,
+            182,
+            212
+          ],
+          "color2": [
+            255,
+            100,
+            0
+          ],
+          "blend_start": 0,
+          "effect": "Chase"
+        },
+        {
+          "app": "",
+          "mode": "default",
+          "color": [
+            6,
+            182,
+            212
+          ],
+          "color2": [
+            255,
+            100,
+            0
+          ],
+          "blend_start": 0,
+          "effect": "Chase"
+        },
+        {
+          "app": "",
+          "mode": "default",
+          "color": [
+            6,
+            182,
+            212
+          ],
+          "color2": [
+            255,
+            100,
+            0
+          ],
+          "blend_start": 0,
+          "effect": "Chase"
+        }
+      ]
+    },
+    "Brim": {
+      "macros": {},
+      "encoders": [
+        {
+          "app": "",
+          "mode": "default",
+          "color": [
+            6,
+            182,
+            212
+          ],
+          "color2": [
+            255,
+            100,
+            0
+          ],
+          "blend_start": 0
+        },
+        {
+          "app": "",
+          "mode": "default",
+          "color": [
+            6,
+            182,
+            212
+          ],
+          "color2": [
+            255,
+            100,
+            0
+          ],
+          "blend_start": 0
+        },
+        {
+          "app": "",
+          "mode": "default",
+          "color": [
+            6,
+            182,
+            212
+          ],
+          "color2": [
+            255,
+            100,
+            0
+          ],
+          "blend_start": 0
+        },
+        {
+          "app": "",
+          "mode": "default",
+          "color": [
+            6,
+            182,
+            212
+          ],
+          "color2": [
+            255,
+            100,
+            0
+          ],
+          "blend_start": 0
+        }
+      ]
+    }
+  }
+}
