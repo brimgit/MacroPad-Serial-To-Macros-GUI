@@ -1,16 +1,20 @@
 import serial
 import threading
+import time
 import logging
 from serial.tools import list_ports as sp_list_ports
 from volume_manager import VolumeManager
 
 logging.basicConfig(level=logging.INFO)
 
+
 def list_ports():
-    ports = sp_list_ports.comports()
-    return [port.device for port in ports]
+    return [p.device for p in sp_list_ports.comports()]
+
 
 class SerialManager:
+    _RECONNECT_DELAY = 3.0
+
     def __init__(self, data_callback, port='COM20', baud_rate=115200):
         self.data_callback = data_callback
         self.port = port
@@ -19,42 +23,77 @@ class SerialManager:
         self.running = False
         self.thread = None
         self.volume_manager = VolumeManager()
+        self._connected = False
+        self._stop_event = threading.Event()
         self.start()
 
+    @property
+    def is_connected(self):
+        return self._connected
+
     def start(self):
-        self.stop()  # Ensure any existing connection and thread are stopped before starting new
-        try:
-            self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=1)
-            self.running = True
-            self.thread = threading.Thread(target=self._read_from_port, daemon=True)
-            self.thread.start()
-        except serial.SerialException as e:
-            logging.error(f"Failed to open serial port {self.port} at {self.baud_rate}: {e}")
+        self.stop()
+        self._stop_event.clear()
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
 
     def stop(self):
-        if self.running:
-            self.running = False
-            if self.thread is not None:
-                self.thread.join()
-            if self.serial_port is not None:
-                self.serial_port.close()
+        self.running = False
+        self._stop_event.set()  # wake up any sleeping wait() immediately
+        if self.thread is not None:
+            self.thread.join(timeout=4)
+            self.thread = None
+        self._close_port()
 
-    def _read_from_port(self):
-        while self.running:
+    def _close_port(self):
+        self._connected = False
+        if self.serial_port is not None:
             try:
-                if self.serial_port.in_waiting > 0:
-                    data = self.serial_port.readline()
-                    if data:
-                        self.data_callback(data)
+                self.serial_port.close()
+            except Exception:
+                pass
+            self.serial_port = None
+
+    def _run(self):
+        while self.running:
+            if not self._connected:
+                try:
+                    self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=1)
+                    self._connected = True
+                    logging.info(f'Connected to {self.port} @ {self.baud_rate}')
+                except serial.SerialException as e:
+                    logging.warning(f'Cannot open {self.port}: {e}')
+                    self._stop_event.wait(self._RECONNECT_DELAY)  # interruptible
+                    continue
+
+            try:
+                line = self.serial_port.readline()
+                if line and self.running:
+                    try:
+                        decoded = line.decode('utf-8', errors='replace').strip()
+                        if decoded:
+                            self.data_callback(decoded)
+                    except Exception:
+                        pass
             except serial.SerialException as e:
-                logging.error(f"Error reading from serial port: {e}")
-                break  # Exit the loop if we encounter an error
+                logging.warning(f'Serial read error: {e}')
+                self._close_port()
+                self._stop_event.wait(self._RECONNECT_DELAY)
 
     def update_settings(self, port, baud_rate):
         self.port = port
         self.baud_rate = baud_rate
-        self.start()  # Restart the connection with new settings
+        self.start()
 
     def send_data(self, data):
         if self.serial_port and self.serial_port.is_open:
-            self.serial_port.write(data)
+            try:
+                if isinstance(data, str):
+                    data = data.encode('utf-8')
+                self.serial_port.write(data)
+                self.serial_port.flush()
+                logging.info(f'TX: {data.strip()}')
+            except serial.SerialException as e:
+                logging.warning(f'Send error: {e}')
+                self._close_port()

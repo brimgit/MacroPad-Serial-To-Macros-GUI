@@ -2,5 +2,17 @@
     "1: Pressed": {
         "type": "Media Control",
         "action": "play/pause"
+    },
+    "1: Held": {
+        "type": "Keyboard Key",
+        "action": "a"
+    },
+    "KP:A": {
+        "type": "Mute App",
+        "action": "Toggle mute for assigned app"
+    },
+    "KP:A:HOLD": {
+        "type": "Keyboard Key",
+        "action": "a"
     }
 }

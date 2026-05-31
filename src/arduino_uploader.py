@@ -59,10 +59,6 @@ class ArduinoUploader(QWidget):
         self.upload_button.clicked.connect(self.execute_ino)
         layout.addWidget(self.upload_button)
 
-        self.back_button = QPushButton("Back", self)
-        self.back_button.clicked.connect(self.go_back)
-        layout.addWidget(self.back_button)
-
         self.setLayout(layout)
         self.setWindowTitle("ESP32 Arduino Uploader")
 
@@ -124,5 +120,3 @@ class ArduinoUploader(QWidget):
     def set_serial_manager(self, serial_manager):
         self.serial_manager = serial_manager
 
-    def go_back(self):
-        self.parent().setCurrentIndex(0)  # Go back to the main widget

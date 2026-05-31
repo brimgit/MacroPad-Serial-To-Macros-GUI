@@ -62,6 +62,21 @@ def execute_macro(command):
             keyboard.send(macro["action"])  # Function keys treated similarly
         elif macro["type"] == "Modifier Key":
             keyboard.press_and_release(macro["action"])  # Press and release for modifiers
-        logging.info(f"Executed {macro['type']} macro for {command}: {macro['action']}")
+        elif macro["type"] == "Recorded":
+            try:
+                events_data = json.loads(macro["action"])
+                events = [
+                    keyboard.KeyboardEvent(
+                        event_type=e['event_type'],
+                        scan_code=e.get('scan_code') or 0,
+                        name=e.get('name'),
+                        time=e.get('time', 0),
+                    )
+                    for e in events_data
+                ]
+                keyboard.play(events, speed_factor=0)
+            except Exception as e:
+                logging.error(f"Error executing recorded macro: {e}", exc_info=True)
+        logging.info(f"Executed {macro['type']} macro for {command}: {macro['action'][:40]}")
     else:
         logging.warning("No macro assigned for this command")
