@@ -8,8 +8,11 @@ log = logging.getLogger(__name__)
 macros = {}
 
 
-def set_macro(command, action_type, action):
-    macros[command] = {'type': action_type, 'action': action}
+def set_macro(command, action_type, action, hold_ms=None):
+    entry = {'type': action_type, 'action': action}
+    if hold_ms is not None:
+        entry['hold_ms'] = int(hold_ms)
+    macros[command] = entry
     log.info(f'Macro set: {command} → {action_type}: {action}')
 
 

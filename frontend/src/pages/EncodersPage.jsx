@@ -207,8 +207,10 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
 
   const saveBtnMacro = async (press, hold) => {
     setEditBtn(null)
-    await (press ? api?.set_macro(`KP:${btnKey}`,      press.type, press.action) : api?.delete_macro(`KP:${btnKey}`))
-    await (hold  ? api?.set_macro(`KP:${btnKey}:HOLD`, hold.type,  hold.action)  : api?.delete_macro(`KP:${btnKey}:HOLD`))
+    if (press) await api?.set_macro(`KP:${btnKey}`,      press.type, press.action)
+    else       await api?.delete_macro(`KP:${btnKey}`)
+    if (hold)  await api?.set_macro(`KP:${btnKey}:HOLD`, hold.type,  hold.action, hold.hold_ms ?? 500)
+    else       await api?.delete_macro(`KP:${btnKey}:HOLD`)
     onRefresh?.()
   }
 
@@ -242,6 +244,8 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
         <label style={lblSt}>Volume App</label>
         <select value={local.app||''} onChange={e=>upd('app',e.target.value)} style={fld}>
           <option value="">— None —</option>
+          <option value="__MASTER__">🔊 Master Volume</option>
+          <option value="__MIC__">🎤 Microphone</option>
           {audioApps.map(a => {
             const takenBy = usedApps?.[a]
             const conflict = takenBy !== undefined && takenBy !== idx

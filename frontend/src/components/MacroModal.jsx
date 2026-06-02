@@ -118,10 +118,27 @@ export function ActionInput({ t, api, type, value, onChange }) {
   )
 }
 
-function MacroSection({ t, api, label, type, setType, action, setAction }) {
+function MacroSection({ t, api, label, type, setType, action, setAction, holdMs, setHoldMs }) {
+  const isHold = label.startsWith('Hold')
   return (
     <div style={{ marginBottom:16 }}>
-      <div style={{ fontSize:11, fontWeight:600, color:t.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>{label}</div>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+        <span style={{ fontSize:11, fontWeight:600, color:t.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>
+          {label}
+        </span>
+        {isHold && type && setHoldMs && (
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginLeft:'auto' }}>
+            <span style={{ fontSize:11, color:t.dim }}>after</span>
+            <input
+              type="number" value={holdMs} min={100} max={3000} step={50}
+              onChange={e => setHoldMs(Math.max(100, Math.min(3000, Number(e.target.value))))}
+              style={{ width:64, padding:'3px 7px', borderRadius:4, border:`1px solid ${t.border}`,
+                       background:t.elevated, color:t.text, fontSize:12, textAlign:'center' }}
+            />
+            <span style={{ fontSize:11, color:t.dim }}>ms</span>
+          </div>
+        )}
+      </div>
       <select value={type} onChange={e => { setType(e.target.value); setAction('') }}
         style={{ ...fieldStyle(t), marginBottom:8 }}>
         <option value="">— None —</option>
@@ -135,14 +152,15 @@ function MacroSection({ t, api, label, type, setType, action, setAction }) {
 // ── modal ─────────────────────────────────────────────────────────────────────
 
 export function MacroModal({ t, api, title, pressData, holdData, onSave, onClose, showHold=true }) {
-  const [pressType,   setPressType]   = useState(pressData?.type   ?? '')
-  const [pressAction, setPressAction] = useState(pressData?.action ?? '')
-  const [holdType,    setHoldType]    = useState(holdData?.type    ?? '')
-  const [holdAction,  setHoldAction]  = useState(holdData?.action  ?? '')
+  const [pressType,   setPressType]   = useState(pressData?.type    ?? '')
+  const [pressAction, setPressAction] = useState(pressData?.action  ?? '')
+  const [holdType,    setHoldType]    = useState(holdData?.type     ?? '')
+  const [holdAction,  setHoldAction]  = useState(holdData?.action   ?? '')
+  const [holdMs,      setHoldMs]      = useState(holdData?.hold_ms  ?? 500)
 
   const save = () => onSave(
     pressType ? { type:pressType, action:pressAction } : null,
-    showHold  ? (holdType ? { type:holdType, action:holdAction } : null) : undefined,
+    showHold  ? (holdType ? { type:holdType, action:holdAction, hold_ms:holdMs } : null) : undefined,
   )
 
   return (
@@ -154,8 +172,13 @@ export function MacroModal({ t, api, title, pressData, holdData, onSave, onClose
           <span style={{ fontSize:15, fontWeight:700 }}>{title}</span>
           <button onClick={onClose} style={{ background:'none', border:'none', color:t.muted, cursor:'pointer', fontSize:16 }}>✕</button>
         </div>
-        <MacroSection t={t} api={api} label="Press"           type={pressType} setType={setPressType} action={pressAction} setAction={setPressAction} />
-        {showHold && <MacroSection t={t} api={api} label="Hold (500 ms+)" type={holdType} setType={setHoldType} action={holdAction} setAction={setHoldAction} />}
+        <MacroSection t={t} api={api} label="Press"
+          type={pressType} setType={setPressType} action={pressAction} setAction={setPressAction} />
+        {showHold && (
+          <MacroSection t={t} api={api} label="Hold"
+            type={holdType} setType={setHoldType} action={holdAction} setAction={setHoldAction}
+            holdMs={holdMs} setHoldMs={setHoldMs} />
+        )}
         <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:4 }}>
           <button onClick={onClose} style={outlineBtn(t)}>Cancel</button>
           <button onClick={save}    style={solidBtn(t)}>Save</button>

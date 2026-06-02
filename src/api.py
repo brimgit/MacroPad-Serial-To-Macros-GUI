@@ -171,13 +171,17 @@ class MacroPadAPI:
         active   = profile_manager.get_active(self._profile_data)
         encoders = active.get('encoders', self._default_encoders())
 
+        from volume_manager import MASTER_APP, MIC_APP
         for enc_id, enc in enumerate(encoders):
             n   = enc_id + 1
             app = enc.get('app', '')
+            vm  = self._serial_mgr.volume_manager if self._serial_mgr else None
+
+            # Read mute state (master/mic don't support per-app mute)
             muted = False
-            if app and self._serial_mgr:
+            if vm and app and app not in (MASTER_APP, MIC_APP):
                 try:
-                    muted = bool(self._serial_mgr.volume_manager.get_mute(app))
+                    muted = bool(vm.get_mute(app))
                 except Exception as e:
                     log.debug(f'Could not read mute state for {app}: {e}')
             self._enc_muted[enc_id] = muted
@@ -190,11 +194,14 @@ class MacroPadAPI:
                 self._serial_send(_color_cmd(enc_id, enc))
                 time.sleep(0.06)
                 pct = 0
-                if app and self._serial_mgr:
+                if vm and app:
                     try:
-                        vol = self._serial_mgr.volume_manager.get_volume(app)
-                        if vol is not None:
-                            pct = vol
+                        if app == MASTER_APP:
+                            pct = vm.get_master_volume() or 0
+                        elif app == MIC_APP:
+                            pct = vm.get_mic_volume() or 0
+                        else:
+                            pct = vm.get_volume(app) or 0
                     except Exception as e:
                         log.debug(f'Could not read volume for {app}: {e}')
                 self._serial_send(f'{n}:{pct}')
@@ -229,7 +236,14 @@ class MacroPadAPI:
                         ).start()
                     self._push('encoder_turn', {'id': enc_id, 'direction': direction, 'app': app, 'pct': -1, 'muted': True})
                 elif app and self._serial_mgr:
-                    val = self._serial_mgr.volume_manager.adjust_volume(app, increase=increase)
+                    vm  = self._serial_mgr.volume_manager
+                    from volume_manager import MASTER_APP, MIC_APP
+                    if app == MASTER_APP:
+                        val = vm.adjust_master_volume(increase)
+                    elif app == MIC_APP:
+                        val = vm.adjust_mic_volume(increase)
+                    else:
+                        val = vm.adjust_volume(app, increase=increase)
                     if val is not None:
                         pct = val
                         self._serial_send(f'{enc_id + 1}:{pct}')
@@ -256,7 +270,9 @@ class MacroPadAPI:
                 else:
                     down_t = self._key_down_times.pop(key, None)
                     ms = round((time.monotonic() - down_t) * 1000) if down_t else 0
-                macro_key = f'KP:{key}:HOLD' if ms >= 500 else f'KP:{key}'
+                hold_entry = macro_manager.macros.get(f'KP:{key}:HOLD')
+                threshold  = hold_entry.get('hold_ms', 500) if hold_entry else 500
+                macro_key  = f'KP:{key}:HOLD' if ms >= threshold else f'KP:{key}'
                 macro      = macro_manager.macros.get(macro_key)
                 if macro and macro.get('type') == 'Mute App':
                     self._execute_mute_app(key)
@@ -273,8 +289,9 @@ class MacroPadAPI:
     def get_macros(self):
         return dict(macro_manager.macros)
 
-    def set_macro(self, key, macro_type, action):
-        macro_manager.set_macro(key, macro_type, action)
+    def set_macro(self, key, macro_type, action, hold_ms=None):
+        macro_manager.set_macro(key, macro_type, action,
+                                hold_ms=int(hold_ms) if hold_ms is not None else None)
         macro_manager.save_macros()
         self._queue_profile_save()
         return {'ok': True}
@@ -487,7 +504,14 @@ class MacroPadAPI:
         app = encoders[enc_id].get('app', '')
         if not app:
             return
-        muted = self._serial_mgr.volume_manager.toggle_mute(app)
+        from volume_manager import MASTER_APP, MIC_APP
+        vm = self._serial_mgr.volume_manager
+        if app == MASTER_APP:
+            muted = vm.toggle_master_mute()
+        elif app == MIC_APP:
+            muted = vm.toggle_mic_mute()
+        else:
+            muted = vm.toggle_mute(app)
         self._enc_muted[enc_id] = bool(muted)
         n = enc_id + 1
         if muted:

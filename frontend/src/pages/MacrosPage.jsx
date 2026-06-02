@@ -8,8 +8,10 @@ export default function MacrosPage({ t, macros, api, onRefresh }) {
 
   const handleSave = async (keyId, press, hold) => {
     setEditing(null)
-    await (press ? api?.set_macro(`KP:${keyId}`,      press.type, press.action) : api?.delete_macro(`KP:${keyId}`))
-    await (hold  ? api?.set_macro(`KP:${keyId}:HOLD`, hold.type,  hold.action)  : api?.delete_macro(`KP:${keyId}:HOLD`))
+    if (press) await api?.set_macro(`KP:${keyId}`,      press.type, press.action)
+    else       await api?.delete_macro(`KP:${keyId}`)
+    if (hold)  await api?.set_macro(`KP:${keyId}:HOLD`, hold.type,  hold.action, hold.hold_ms ?? 500)
+    else       await api?.delete_macro(`KP:${keyId}:HOLD`)
     onRefresh?.()
   }
 
