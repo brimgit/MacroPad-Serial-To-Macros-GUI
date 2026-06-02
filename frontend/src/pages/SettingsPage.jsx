@@ -9,9 +9,20 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
   const [effectSpeed, setEffectSpeed] = useState(settings.effect_speed_ms ?? 10)
   const [saving,      setSaving]      = useState(false)
   const [status,      setStatus]      = useState('')
+  const [updateInfo,  setUpdateInfo]  = useState(null)   // null | result from check_for_update
+  const [checking,    setChecking]    = useState(false)
 
   useEffect(() => {
     api?.get_ports().then(p => { if (Array.isArray(p)) setPorts(p) }).catch(() => {})
+  }, [api])
+
+  // Auto-check for updates when the page loads
+  useEffect(() => {
+    if (!api) return
+    setChecking(true)
+    api.check_for_update()
+      .then(r => { setUpdateInfo(r); setChecking(false) })
+      .catch(() => setChecking(false))
   }, [api])
 
   const refreshPorts = async () => {
@@ -188,6 +199,61 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
             style={{ flex: 1, padding: '8px', borderRadius: 6, border: `1px solid ${t.border}`, background: 'transparent', color: t.text, cursor: 'pointer', fontSize: 13 }}>
             ↑ Import profile…
           </button>
+        </div>
+      </div>
+
+      {/* Updates */}
+      <div style={section}>
+        <div style={sectionTitle}>Updates</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={async () => {
+              setChecking(true); setUpdateInfo(null)
+              const r = await api?.check_for_update().catch(() => null)
+              setUpdateInfo(r); setChecking(false)
+            }}
+            disabled={checking}
+            style={{
+              padding: '7px 16px', borderRadius: 6,
+              border: `1px solid ${t.border}`, background: 'transparent',
+              color: t.text, fontSize: 13, cursor: checking ? 'not-allowed' : 'pointer',
+              opacity: checking ? 0.6 : 1,
+            }}
+          >
+            {checking ? 'Checking…' : '↻ Check for Updates'}
+          </button>
+
+          {updateInfo?.update_available && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, color: t.warning, fontWeight: 600 }}>
+                ⚠ Update available — v{updateInfo.latest}
+              </span>
+              <span style={{ fontSize: 12, color: t.muted }}>
+                (current: v{updateInfo.current})
+              </span>
+              <a
+                href={updateInfo.repo_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 12, color: t.accent, textDecoration: 'none' }}
+                onClick={e => { e.preventDefault(); api?.send_command?.(''); window.open?.(updateInfo.repo_url) }}
+              >
+                View on GitHub ↗
+              </a>
+            </div>
+          )}
+
+          {updateInfo?.ok && !updateInfo.update_available && (
+            <span style={{ fontSize: 13, color: t.success }}>
+              ✓ Up to date — v{updateInfo.current}
+            </span>
+          )}
+
+          {updateInfo?.ok === false && (
+            <span style={{ fontSize: 13, color: t.danger }}>
+              ✗ {updateInfo.error}
+            </span>
+          )}
         </div>
       </div>
 

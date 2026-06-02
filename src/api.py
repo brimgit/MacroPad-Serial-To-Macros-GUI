@@ -5,9 +5,12 @@ All public methods are callable from JS as:
 """
 import json
 import logging
+import os
 import threading
 import time
 import subprocess
+import urllib.request
+import urllib.error
 import macro_manager
 import profile_manager
 from utils import get_data_path
@@ -598,6 +601,57 @@ class MacroPadAPI:
                 self._serial_send(f'{enc_id + 1}:{vol}')
         except Exception as e:
             log.debug(f'_restore_encoder_led failed for enc {enc_id}: {e}')
+
+    # ── Update check ──────────────────────────────────────────────────────────
+    _REPO      = 'brimgit/MacroPad-Serial-To-Macros-GUI'
+    _RAW_URL   = f'https://raw.githubusercontent.com/{_REPO}/main/version.txt'
+    _REPO_URL  = f'https://github.com/{_REPO}'
+
+    def check_for_update(self):
+        """Fetch version.txt from GitHub and compare with the local version."""
+        try:
+            local = self._local_version()
+        except Exception as e:
+            return {'ok': False, 'error': f'Could not read local version: {e}'}
+
+        try:
+            req = urllib.request.Request(
+                self._RAW_URL,
+                headers={'User-Agent': 'MacroPad-version-check/1.0'},
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                remote = resp.read().decode().strip()
+        except urllib.error.URLError as e:
+            return {'ok': False, 'error': f'Could not reach GitHub: {e.reason}', 'current': local}
+        except Exception as e:
+            return {'ok': False, 'error': str(e), 'current': local}
+
+        return {
+            'ok':              True,
+            'current':         local,
+            'latest':          remote,
+            'update_available': self._version_gt(remote, local),
+            'repo_url':        self._REPO_URL,
+        }
+
+    def _local_version(self) -> str:
+        path = os.path.join(os.path.dirname(__file__), '..', 'version.txt')
+        with open(os.path.normpath(path), 'r') as f:
+            return f.read().strip()
+
+    @staticmethod
+    def _version_gt(a: str, b: str) -> bool:
+        """Return True if version string a is strictly greater than b."""
+        def parts(v):
+            return [int(x) for x in v.lstrip('v').split('.')]
+        try:
+            ap, bp = parts(a), parts(b)
+            # Pad to equal length
+            while len(ap) < len(bp): ap.append(0)
+            while len(bp) < len(ap): bp.append(0)
+            return ap > bp
+        except Exception:
+            return a != b
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _load_settings(self):

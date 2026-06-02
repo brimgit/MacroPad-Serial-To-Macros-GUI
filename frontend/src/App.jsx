@@ -17,13 +17,13 @@ const DARK_THEME = {
   bg: '#0d1117', sidebar: '#090e1a', card: '#161c2a', elevated: '#1c2438',
   hover: '#222d42', border: '#1e2a3a', borderLight: '#283548',
   text: '#f1f5f9', muted: '#94a3b8', dim: '#4b5675', accent: '#06b6d4',
-  success: '#10b981', danger: '#ef4444',
+  success: '#10b981', warning: '#f59e0b', danger: '#ef4444',
 }
 const LIGHT_THEME = {
   bg: '#e8eaed', sidebar: '#dde0e5', card: '#f1f3f5', elevated: '#e0e3e8',
   hover: '#d4d8de', border: '#c4c8cf', borderLight: '#b8bcc4',
   text: '#111827', muted: '#4b5563', dim: '#9ca3af', accent: '#0284c7',
-  success: '#16a34a', danger: '#dc2626',
+  success: '#16a34a', warning: '#d97706', danger: '#dc2626',
 }
 
 const DEFAULT_ENCODERS = Array.from({ length: 4 }, () => ({
