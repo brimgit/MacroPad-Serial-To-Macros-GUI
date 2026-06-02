@@ -14,32 +14,40 @@
         "KP:A": {
           "type": "Mute App",
           "action": "Toggle mute for assigned app"
+        },
+        "KP:1": {
+          "type": "Keyboard Key",
+          "action": "a"
+        },
+        "KP:1:HOLD": {
+          "type": "Recorded",
+          "action": "[{\"event_type\": \"down\", \"scan_code\": 48, \"name\": \"b\", \"time\": 0.0}, {\"event_type\": \"up\", \"scan_code\": 48, \"name\": \"b\", \"time\": 0.076}, {\"event_type\": \"down\", \"scan_code\": 19, \"name\": \"r\", \"time\": 0.092}, {\"event_type\": \"up\", \"scan_code\": 19, \"name\": \"r\", \"time\": 0.15}, {\"event_type\": \"down\", \"scan_code\": 23, \"name\": \"i\", \"time\": 0.175}, {\"event_type\": \"down\", \"scan_code\": 30, \"name\": \"a\", \"time\": 0.268}, {\"event_type\": \"up\", \"scan_code\": 23, \"name\": \"i\", \"time\": 0.293}, {\"event_type\": \"up\", \"scan_code\": 30, \"name\": \"a\", \"time\": 0.36}, {\"event_type\": \"down\", \"scan_code\": 49, \"name\": \"n\", \"time\": 0.41}, {\"event_type\": \"up\", \"scan_code\": 49, \"name\": \"n\", \"time\": 0.494}, {\"event_type\": \"down\", \"scan_code\": 28, \"name\": \"enter\", \"time\": 0.947}, {\"event_type\": \"up\", \"scan_code\": 28, \"name\": \"enter\", \"time\": 0.997}]"
         }
       },
       "encoders": [
         {
-          "app": "Discord.exe",
-          "mode": "solid",
-          "color": [
-            0,
-            200,
-            0
-          ],
-          "color2": [
-            200,
-            0,
-            0
-          ],
-          "blend_start": 0,
-          "effect": "Wave"
-        },
-        {
           "app": "steam.exe",
           "mode": "default",
           "color": [
-            6,
-            182,
-            212
+            0,
+            200,
+            0
+          ],
+          "color2": [
+            200,
+            0,
+            0
+          ],
+          "blend_start": 0,
+          "effect": "Off"
+        },
+        {
+          "app": "",
+          "mode": "default",
+          "color": [
+            30,
+            0,
+            255
           ],
           "color2": [
             255,
@@ -47,7 +55,7 @@
             0
           ],
           "blend_start": 0,
-          "effect": "Chase"
+          "effect": "Off"
         },
         {
           "app": "",
@@ -63,7 +71,7 @@
             0
           ],
           "blend_start": 0,
-          "effect": "Chase"
+          "effect": "Off"
         },
         {
           "app": "",
@@ -79,7 +87,7 @@
             0
           ],
           "blend_start": 0,
-          "effect": "Chase"
+          "effect": "Off"
         }
       ]
     },

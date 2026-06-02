@@ -42,6 +42,8 @@ MACRO_ACTIONS = {
 class StatusBadge(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._connected = False
+        self._port = ''
         self.setAttribute(Qt.WA_StyledBackground, False)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
@@ -58,6 +60,8 @@ class StatusBadge(QWidget):
         layout.addWidget(self.text)
 
     def set_connected(self, connected, port=''):
+        self._connected = connected
+        self._port = port
         if connected:
             self.dot.setStyleSheet(f'font-size: 9px; color: {theme.SUCCESS};')
             self.text.setText(port if port else 'Connected')
@@ -67,32 +71,80 @@ class StatusBadge(QWidget):
             self.text.setText('Not Connected')
             self.text.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED};')
 
+    def refresh_theme(self):
+        self.set_connected(self._connected, self._port)
+
+
+class ToggleSwitch(QWidget):
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._checked = False
+        self.setFixedSize(40, 22)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def setChecked(self, checked):
+        self._checked = checked
+        self.update()
+
+    def isChecked(self):
+        return self._checked
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        if self._checked:
+            p.setBrush(QBrush(QColor(theme.ACCENT)))
+        else:
+            p.setBrush(QBrush(QColor(theme.BG_ELEVATED)))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(0, 0, 40, 22, 11, 11)
+        cx = 21 if self._checked else 3
+        p.setBrush(QBrush(QColor('#ffffff')))
+        p.drawEllipse(cx, 3, 16, 16)
+        p.end()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._checked = not self._checked
+            self.toggled.emit(self._checked)
+            self.update()
+        super().mousePressEvent(event)
+
 
 class NavButton(QWidget):
     clicked = pyqtSignal()
 
     def __init__(self, icon_char, label, parent=None):
         super().__init__(parent)
-        self._active = False
+        self._active    = False
+        self._collapsed = False
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedHeight(46)
+        self.setFixedHeight(44)
         self.setAttribute(Qt.WA_StyledBackground, True)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(11)
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(12, 0, 12, 0)
+        self._layout.setSpacing(12)
 
+        # Icon box
+        self._icon_box = QFrame()
+        self._icon_box.setFixedSize(32, 32)
+        self._icon_box.setAttribute(Qt.WA_StyledBackground, True)
+        _il = QHBoxLayout(self._icon_box)
+        _il.setContentsMargins(0, 0, 0, 0)
         self._icon = QLabel(icon_char)
-        self._icon.setFixedSize(24, 24)
         self._icon.setAlignment(Qt.AlignCenter)
-        self._icon.setStyleSheet(f'font-size: 14px; color: {theme.TEXT_DIM};')
+        self._icon.setStyleSheet('background: transparent; border: none;')
+        _il.addWidget(self._icon)
 
         self._label = QLabel(label)
-        self._label.setStyleSheet(f'font-size: 13px; color: {theme.TEXT_MUTED}; letter-spacing: 0.2px;')
+        self._label.setFixedWidth(110)
 
-        layout.addWidget(self._icon)
-        layout.addWidget(self._label)
-        layout.addStretch()
+        self._layout.addWidget(self._icon_box)
+        self._layout.addWidget(self._label)
+        self._layout.addStretch()
 
         self._set_style(False)
 
@@ -100,33 +152,33 @@ class NavButton(QWidget):
         self._active = active
         self._set_style(active)
 
+    def set_collapsed(self, collapsed):
+        self._collapsed = collapsed
+        self._label.setVisible(not collapsed)
+        self._set_style(self._active)
+
     def _set_style(self, active):
+        self.setStyleSheet(
+            f'NavButton {{ background: transparent; border: none; }}'
+            f'NavButton:hover {{ background: {theme.BG_ELEVATED}; border-radius: 8px; }}'
+        )
         if active:
-            self.setStyleSheet(f'''
-                NavButton {{
-                    background-color: {theme.ACCENT}18;
-                    border-left: 2px solid {theme.ACCENT};
-                    border-right: 2px solid transparent;
-                }}
-            ''')
-            self._icon.setStyleSheet(f'font-size: 14px; color: {theme.ACCENT};')
+            self._icon_box.setStyleSheet(
+                f'background: {theme.ACCENT}22; border: 1px solid {theme.ACCENT}55; border-radius: 8px;')
+            self._icon.setStyleSheet(
+                f'font-size: 15px; color: {theme.ACCENT}; background: transparent; border: none;')
             self._label.setStyleSheet(
-                f'font-size: 13px; color: {theme.ACCENT}; font-weight: 600; letter-spacing: 0.2px;')
+                f'font-size: 13px; font-weight: 600; color: {theme.TEXT}; background: transparent;')
         else:
-            self.setStyleSheet(f'''
-                NavButton {{
-                    background-color: transparent;
-                    border-left: 2px solid transparent;
-                    border-right: 2px solid transparent;
-                }}
-                NavButton:hover {{
-                    background-color: {theme.BG_ELEVATED}88;
-                    border-left: 2px solid {theme.BORDER_LIGHT};
-                }}
-            ''')
-            self._icon.setStyleSheet(f'font-size: 14px; color: {theme.TEXT_DIM};')
+            self._icon_box.setStyleSheet(
+                f'background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER}; border-radius: 8px;')
+            self._icon.setStyleSheet(
+                f'font-size: 15px; color: {theme.TEXT_MUTED}; background: transparent; border: none;')
             self._label.setStyleSheet(
-                f'font-size: 13px; color: {theme.TEXT_MUTED}; letter-spacing: 0.2px;')
+                f'font-size: 13px; color: {theme.TEXT_MUTED}; background: transparent;')
+
+    def refresh_theme(self):
+        self._set_style(self._active)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -385,7 +437,8 @@ class KeyCard(QFrame):
         self.key_id = key_id
         self.press_data = None
         self.hold_data = None
-        self.setFixedSize(100, 100)
+        self.setMinimumSize(90, 90)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setCursor(Qt.PointingHandCursor)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._build_ui()
@@ -472,6 +525,17 @@ class KeyCard(QFrame):
                     border-top: 1px solid {theme.TEXT_DIM};
                 }}
             ''')
+
+    def refresh_theme(self):
+        self._refresh_style()
+        if self.press_data:
+            self._press_lbl.setStyleSheet(
+                f'font-size: 11px; color: {theme.ACCENT}; background: transparent; font-weight: 600;')
+        else:
+            self._press_lbl.setStyleSheet(
+                f'font-size: 11px; color: {theme.TEXT_MUTED}; background: transparent;')
+        self._hold_lbl.setStyleSheet(
+            f'font-size: 10px; color: {theme.TEXT_DIM}; font-style: italic; background: transparent;')
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -772,28 +836,36 @@ class EncoderCard(QFrame):
         self.setMinimumWidth(260)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setObjectName(f'encoder_card_{encoder_id}')
+        self._apply_card_stylesheet()
+        self._build_ui()
+        self._color_row.setVisible(self._mode != 'default')
+        self._arrow_lbl.setVisible(self._mode == 'fade')
+        self._color2_btn.setVisible(self._mode == 'fade')
+
+    def _apply_card_stylesheet(self):
+        n = self.encoder_id
         self.setStyleSheet(f'''
-            #encoder_card_{encoder_id} {{
+            #encoder_card_{n} {{
                 background-color: {theme.BG_CARD};
                 border: 1px solid {theme.BORDER};
                 border-top: 1px solid {theme.BORDER_LIGHT};
                 border-radius: 14px;
             }}
-            #encoder_card_{encoder_id} QLabel {{
+            #encoder_card_{n} QLabel {{
                 background: transparent;
                 color: {theme.TEXT};
             }}
-            #encoder_card_{encoder_id} QComboBox {{
+            #encoder_card_{n} QComboBox {{
                 background-color: {theme.BG_ELEVATED};
                 border: 1px solid {theme.BORDER_LIGHT};
                 border-radius: 8px;
                 color: {theme.TEXT};
                 padding: 5px 30px 5px 10px;
             }}
-            #encoder_card_{encoder_id} QComboBox:hover {{
+            #encoder_card_{n} QComboBox:hover {{
                 border-color: {theme.ACCENT};
             }}
-            #encoder_card_{encoder_id} QComboBox QAbstractItemView {{
+            #encoder_card_{n} QComboBox QAbstractItemView {{
                 background-color: {theme.BG_CARD};
                 border: 1px solid {theme.BORDER_LIGHT};
                 color: {theme.TEXT};
@@ -801,10 +873,18 @@ class EncoderCard(QFrame):
                 selection-color: #000;
             }}
         ''')
-        self._build_ui()
-        self._color_row.setVisible(self._mode != 'default')
-        self._arrow_lbl.setVisible(self._mode == 'fade')
-        self._color2_btn.setVisible(self._mode == 'fade')
+
+    def refresh_theme(self):
+        self._apply_card_stylesheet()
+        self._refresh_color_btn()
+        self._refresh_color2_btn()
+        lbl_style = f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;'
+        for lbl in [self._mode_lbl, self._app_lbl]:
+            lbl.setStyleSheet(lbl_style)
+        if hasattr(self, '_blend_lbl'):
+            self._blend_lbl.setStyleSheet(lbl_style)
+        if hasattr(self, '_color_lbl'):
+            self._color_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED};')
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -846,12 +926,12 @@ class EncoderCard(QFrame):
 
         # Mode selector
         mode_row = QHBoxLayout()
-        mode_lbl = QLabel('Mode')
-        mode_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;')
+        self._mode_lbl = QLabel('Mode')
+        self._mode_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;')
         self._mode_combo = QComboBox()
         self._mode_combo.addItems(['Default', 'Fade', 'Solid'])
         self._mode_combo.currentTextChanged.connect(self._on_mode_changed)
-        mode_row.addWidget(mode_lbl)
+        mode_row.addWidget(self._mode_lbl)
         mode_row.addWidget(self._mode_combo, 1)
         layout.addLayout(mode_row)
 
@@ -862,9 +942,9 @@ class EncoderCard(QFrame):
         color_inner.setContentsMargins(0, 0, 0, 0)
         color_inner.setSpacing(8)
 
-        color_lbl = QLabel('Color')
-        color_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED};')
-        color_lbl.setFixedWidth(50)
+        self._color_lbl = QLabel('Color')
+        self._color_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED};')
+        self._color_lbl.setFixedWidth(50)
 
         self._color_btn = QPushButton()
         self._color_btn.setFixedSize(68, 26)
@@ -883,7 +963,7 @@ class EncoderCard(QFrame):
         self._color2_btn.setVisible(False)
         self._refresh_color2_btn()
 
-        color_inner.addWidget(color_lbl)
+        color_inner.addWidget(self._color_lbl)
         color_inner.addWidget(self._color_btn)
         color_inner.addWidget(self._arrow_lbl)
         color_inner.addWidget(self._color2_btn)
@@ -900,8 +980,8 @@ class EncoderCard(QFrame):
 
         # Blend start slider
         blend_row = QHBoxLayout()
-        blend_lbl = QLabel('Blend from')
-        blend_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;')
+        self._blend_lbl = QLabel('Blend from')
+        self._blend_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;')
         self._blend_slider = QSlider(Qt.Horizontal)
         self._blend_slider.setRange(0, 90)
         self._blend_slider.setValue(0)
@@ -917,7 +997,7 @@ class EncoderCard(QFrame):
         self._blend_debounce.setSingleShot(True)
         self._blend_debounce.timeout.connect(self._emit_blend)
         self._blend_slider.valueChanged.connect(self._on_blend_changed)
-        blend_row.addWidget(blend_lbl)
+        blend_row.addWidget(self._blend_lbl)
         blend_row.addWidget(self._blend_slider, 1)
         blend_row.addWidget(self._blend_val_lbl)
         fade_inner.addLayout(blend_row)
@@ -936,8 +1016,8 @@ class EncoderCard(QFrame):
 
         # Volume app selector — always visible
         app_row = QHBoxLayout()
-        app_lbl = QLabel('App')
-        app_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;')
+        self._app_lbl = QLabel('App')
+        self._app_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED}; min-width: 60px;')
         self._app_combo = QComboBox()
         self._app_combo.setPlaceholderText('Select app...')
         self._app_combo.currentTextChanged.connect(self._on_app_changed)
@@ -952,7 +1032,7 @@ class EncoderCard(QFrame):
             QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}
         ''')
         refresh_btn.clicked.connect(lambda: self.app_refresh_requested.emit(self.encoder_id))
-        app_row.addWidget(app_lbl)
+        app_row.addWidget(self._app_lbl)
         app_row.addWidget(self._app_combo, 1)
         app_row.addWidget(refresh_btn)
         layout.addLayout(app_row)

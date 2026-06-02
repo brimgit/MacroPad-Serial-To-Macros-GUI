@@ -3,6 +3,18 @@ __pycache__/
 *.pyo
 *.pyd
 *.lnk
+
+# User data
 Data/macros.json
 Data/settings_serial.json
 src/Data/settings_serial.json
+
+# Build artifacts
+build/
+dist/
+MacroPad.spec
+*.spec
+
+# Frontend build output and dependencies
+frontend/node_modules/
+frontend/dist/

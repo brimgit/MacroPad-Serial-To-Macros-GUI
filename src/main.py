@@ -13,7 +13,7 @@ sip.setdestroyonexit(False)
 
 def main():
     app = QApplication(sys.argv)
-    app.setStyleSheet(theme.STYLESHEET)
+    app.setStyleSheet(theme.build_stylesheet())
 
     icon_path = resource_path('Assets/Images/icon.ico')
     app.setWindowIcon(QIcon(icon_path))

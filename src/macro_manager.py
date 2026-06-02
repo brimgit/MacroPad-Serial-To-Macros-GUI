@@ -76,7 +76,7 @@ def execute_macro(command):
                     )
                     for e in events_data
                 ]
-                keyboard.play(events, speed_factor=0)
+                keyboard.play(events, speed_factor=1)
             except Exception as e:
                 logging.error(f"Error executing recorded macro: {e}", exc_info=True)
         logging.info(f"Executed {macro['type']} macro for {command}: {macro['action'][:40]}")

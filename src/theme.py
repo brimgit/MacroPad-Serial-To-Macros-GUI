@@ -1,22 +1,77 @@
-BG           = '#0d1117'
-BG_CARD      = '#161c2a'
-BG_ELEVATED  = '#1c2438'
-BG_HOVER     = '#222d42'
-SIDEBAR_BG   = '#090e1a'
-ACCENT       = '#06b6d4'
-ACCENT_DIM   = '#0891b2'
-ACCENT_HOVER = '#22d3ee'
-ACCENT_GLOW  = '#06b6d418'
-SUCCESS      = '#10b981'
-WARNING      = '#f59e0b'
-DANGER       = '#ef4444'
-TEXT         = '#f1f5f9'
-TEXT_MUTED   = '#94a3b8'
-TEXT_DIM     = '#4b5675'
-BORDER       = '#1e2a3a'
-BORDER_LIGHT = '#283548'
+_DARK = {
+    'BG': '#0d1117', 'BG_CARD': '#161c2a', 'BG_ELEVATED': '#1c2438',
+    'BG_HOVER': '#222d42', 'SIDEBAR_BG': '#090e1a',
+    'ACCENT': '#06b6d4', 'ACCENT_DIM': '#0891b2', 'ACCENT_HOVER': '#22d3ee', 'ACCENT_GLOW': '#06b6d418',
+    'SUCCESS': '#10b981', 'WARNING': '#f59e0b', 'DANGER': '#ef4444',
+    'TEXT': '#f1f5f9', 'TEXT_MUTED': '#94a3b8', 'TEXT_DIM': '#4b5675',
+    'BORDER': '#1e2a3a', 'BORDER_LIGHT': '#283548',
+}
+_LIGHT = {
+    'BG': '#e8eaed', 'BG_CARD': '#f1f3f5', 'BG_ELEVATED': '#e0e3e8',
+    'BG_HOVER': '#d4d8de', 'SIDEBAR_BG': '#e8eaed',
+    'ACCENT': '#0284c7', 'ACCENT_DIM': '#0369a1', 'ACCENT_HOVER': '#0ea5e9', 'ACCENT_GLOW': '#0284c718',
+    'SUCCESS': '#16a34a', 'WARNING': '#d97706', 'DANGER': '#dc2626',
+    'TEXT': '#111827', 'TEXT_MUTED': '#4b5563', 'TEXT_DIM': '#9ca3af',
+    'BORDER': '#d1d5db', 'BORDER_LIGHT': '#c4c8cf',
+}
 
-STYLESHEET = f"""
+_mode = 'dark'
+
+BG           = _DARK['BG']
+BG_CARD      = _DARK['BG_CARD']
+BG_ELEVATED  = _DARK['BG_ELEVATED']
+BG_HOVER     = _DARK['BG_HOVER']
+SIDEBAR_BG   = _DARK['SIDEBAR_BG']
+ACCENT       = _DARK['ACCENT']
+ACCENT_DIM   = _DARK['ACCENT_DIM']
+ACCENT_HOVER = _DARK['ACCENT_HOVER']
+ACCENT_GLOW  = _DARK['ACCENT_GLOW']
+SUCCESS      = _DARK['SUCCESS']
+WARNING      = _DARK['WARNING']
+DANGER       = _DARK['DANGER']
+TEXT         = _DARK['TEXT']
+TEXT_MUTED   = _DARK['TEXT_MUTED']
+TEXT_DIM     = _DARK['TEXT_DIM']
+BORDER       = _DARK['BORDER']
+BORDER_LIGHT = _DARK['BORDER_LIGHT']
+
+
+def set_mode(mode):
+    global _mode
+    global BG, BG_CARD, BG_ELEVATED, BG_HOVER, SIDEBAR_BG
+    global ACCENT, ACCENT_DIM, ACCENT_HOVER, ACCENT_GLOW
+    global SUCCESS, WARNING, DANGER
+    global TEXT, TEXT_MUTED, TEXT_DIM
+    global BORDER, BORDER_LIGHT
+
+    _mode = mode
+    palette = _DARK if mode == 'dark' else _LIGHT
+
+    BG           = palette['BG']
+    BG_CARD      = palette['BG_CARD']
+    BG_ELEVATED  = palette['BG_ELEVATED']
+    BG_HOVER     = palette['BG_HOVER']
+    SIDEBAR_BG   = palette['SIDEBAR_BG']
+    ACCENT       = palette['ACCENT']
+    ACCENT_DIM   = palette['ACCENT_DIM']
+    ACCENT_HOVER = palette['ACCENT_HOVER']
+    ACCENT_GLOW  = palette['ACCENT_GLOW']
+    SUCCESS      = palette['SUCCESS']
+    WARNING      = palette['WARNING']
+    DANGER       = palette['DANGER']
+    TEXT         = palette['TEXT']
+    TEXT_MUTED   = palette['TEXT_MUTED']
+    TEXT_DIM     = palette['TEXT_DIM']
+    BORDER       = palette['BORDER']
+    BORDER_LIGHT = palette['BORDER_LIGHT']
+
+
+def get_mode():
+    return _mode
+
+
+def build_stylesheet():
+    return f"""
 * {{
     font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', Arial, sans-serif;
 }}
@@ -197,6 +252,40 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
     background: none;
 }}
 
+/* ── CheckBox ───────────────────────────────── */
+QCheckBox {{
+    color: {TEXT};
+    spacing: 8px;
+}}
+QCheckBox::indicator {{
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid {BORDER_LIGHT};
+    background: {BG_ELEVATED};
+}}
+QCheckBox::indicator:checked {{
+    background: {ACCENT};
+    border-color: {ACCENT};
+}}
+
+/* ── ListWidget ─────────────────────────────── */
+QListWidget {{
+    background: {BG_CARD};
+    border: 1px solid {BORDER};
+    border-radius: 10px;
+    color: {TEXT};
+    font-size: 12px;
+    padding: 4px;
+}}
+QListWidget::item {{ padding: 4px 8px; border-radius: 6px; }}
+QListWidget::item:hover {{ background: {BG_ELEVATED}; }}
+QListWidget::item:selected {{ background: {ACCENT}22; color: {ACCENT}; }}
+
+/* ── ScrollArea ─────────────────────────────── */
+QScrollArea {{ background: transparent; border: none; }}
+QScrollArea > QWidget > QWidget {{ background: transparent; }}
+
 /* ── Dialog ─────────────────────────────────── */
 QDialog {{
     background-color: {BG};
@@ -235,3 +324,8 @@ QGroupBox::title {{
     text-transform: uppercase;
 }}
 """
+
+
+# Initialize dark mode and build the initial stylesheet
+set_mode('dark')
+STYLESHEET = build_stylesheet()

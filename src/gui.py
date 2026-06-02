@@ -5,7 +5,7 @@ import sys
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QFrame, QComboBox, QDialog, QGridLayout, QSlider,
-    QSizePolicy, QInputDialog, QMessageBox, QSystemTrayIcon, QMenu, QAction,
+    QSizePolicy, QInputDialog, QMessageBox,
     QFileDialog, QCheckBox, QListWidget, QListWidgetItem, QScrollArea,
 )
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, QThread, QTimer
@@ -13,7 +13,7 @@ from PyQt5.QtGui import QFont
 
 import theme
 from widgets import (
-    StatusBadge, NavButton, KeyCard, MacroAssignDialog, EncoderCard
+    StatusBadge, NavButton, KeyCard, MacroAssignDialog, EncoderCard, ToggleSwitch
 )
 from utils import get_data_path
 import macro_manager
@@ -78,6 +78,7 @@ class MacrosPage(QWidget):
         title.setStyleSheet('font-size: 20px; font-weight: 700; letter-spacing: -0.3px;')
         hint = QLabel('Click a key to assign macros')
         hint.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_DIM};')
+        self._hint_lbl = hint
         header.addWidget(title)
         header.addSpacing(14)
         header.addWidget(hint)
@@ -88,29 +89,25 @@ class MacrosPage(QWidget):
         line.setFrameShape(QFrame.HLine)
         line.setFixedHeight(1)
         line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        self._line = line
         root.addWidget(line)
 
         grid = QGridLayout()
         grid.setSpacing(12)
         grid.setContentsMargins(0, 8, 0, 0)
+        for col in range(4):
+            grid.setColumnStretch(col, 1)
+        for row in range(2):
+            grid.setRowStretch(row, 1)
 
         for row, keys in enumerate(self.KEY_LAYOUT):
             for col, key_id in enumerate(keys):
                 card = KeyCard(key_id)
                 card.assign_clicked.connect(self._on_key_clicked)
                 self._cards[key_id] = card
-                grid.addWidget(card, row, col, Qt.AlignCenter)
+                grid.addWidget(card, row, col)
 
-        wrap = QWidget()
-        wrap.setStyleSheet('background: transparent;')
-        wrap.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        wrap.setLayout(grid)
-
-        center = QHBoxLayout()
-        center.addStretch(1)
-        center.addWidget(wrap, 0, Qt.AlignTop)
-        center.addStretch(1)
-        root.addLayout(center, 1)
+        root.addLayout(grid, 1)
 
     def _on_key_clicked(self, key_id):
         card = self._cards[key_id]
@@ -138,6 +135,12 @@ class MacrosPage(QWidget):
             press = macros_dict.get(f'KP:{key_id}')
             hold = macros_dict.get(f'KP:{key_id}:HOLD')
             card.set_macros(press, hold)
+
+    def refresh_theme(self):
+        self._hint_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_DIM};')
+        self._line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        for card in self._cards.values():
+            card.refresh_theme()
 
 
 class EncodersPage(QWidget):
@@ -168,6 +171,7 @@ class EncodersPage(QWidget):
         title.setStyleSheet('font-size: 20px; font-weight: 700; letter-spacing: -0.3px;')
         hint = QLabel('LED color, mode, volume app, and button macro per encoder')
         hint.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_DIM};')
+        self._hint_lbl = hint
         header.addWidget(title)
         header.addSpacing(14)
         header.addWidget(hint)
@@ -178,6 +182,7 @@ class EncodersPage(QWidget):
         line.setFrameShape(QFrame.HLine)
         line.setFixedHeight(1)
         line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        self._line = line
         root.addWidget(line)
 
         grid = QGridLayout()
@@ -199,6 +204,12 @@ class EncodersPage(QWidget):
             grid.addWidget(card, i // 2, i % 2)
 
         root.addLayout(grid, 1)
+
+    def refresh_theme(self):
+        self._hint_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_DIM};')
+        self._line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        for card in self._cards.values():
+            card.refresh_theme()
 
     def refresh_all_apps(self):
         self._load_apps(None)
@@ -297,109 +308,72 @@ class SettingsPage(QWidget):
         root.setContentsMargins(36, 30, 36, 30)
         root.setSpacing(24)
 
-        title = QLabel('Settings')
-        title.setStyleSheet('font-size: 20px; font-weight: 700; letter-spacing: -0.3px;')
-        root.addWidget(title)
+        self._settings_title = QLabel('Settings')
+        self._settings_title.setStyleSheet('font-size: 20px; font-weight: 700; letter-spacing: -0.3px;')
+        root.addWidget(self._settings_title)
 
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFixedHeight(1)
-        line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
-        root.addWidget(line)
+        self._settings_line = QFrame()
+        self._settings_line.setFrameShape(QFrame.HLine)
+        self._settings_line.setFixedHeight(1)
+        self._settings_line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        root.addWidget(self._settings_line)
 
-        card = QFrame()
-        card.setMaximumWidth(560)
-        card.setStyleSheet(f'''
-            QFrame {{
-                background-color: {theme.BG_CARD};
-                border: 1px solid {theme.BORDER};
-                border-radius: 12px;
-            }}
-            QLabel {{ background: transparent; color: {theme.TEXT}; }}
-            QComboBox {{ background-color: {theme.BG_ELEVATED}; }}
-        ''')
-        card_layout = QVBoxLayout(card)
+        self._serial_card = QFrame()
+        self._serial_card.setMaximumWidth(560)
+        self._serial_card_apply_style()
+        card_layout = QVBoxLayout(self._serial_card)
         card_layout.setContentsMargins(24, 20, 24, 24)
         card_layout.setSpacing(16)
 
-        section_lbl = QLabel('SERIAL CONNECTION')
-        section_lbl.setStyleSheet(f'font-size: 11px; font-weight: 600; color: {theme.TEXT_MUTED}; letter-spacing: 1px;')
-        card_layout.addWidget(section_lbl)
+        self._section_lbl = QLabel('SERIAL CONNECTION')
+        self._section_lbl.setStyleSheet(f'font-size: 11px; font-weight: 600; color: {theme.TEXT_MUTED}; letter-spacing: 1px;')
+        card_layout.addWidget(self._section_lbl)
 
         self._status = StatusBadge()
         card_layout.addWidget(self._status)
 
         port_row = QHBoxLayout()
-        port_lbl = QLabel('Port')
-        port_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px;')
+        self._port_lbl = QLabel('Port')
+        self._port_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px;')
         self._port_combo = QComboBox()
-        refresh_btn = QPushButton('↻')
-        refresh_btn.setFixedSize(34, 34)
-        refresh_btn.setToolTip('Refresh ports')
-        refresh_btn.setStyleSheet(f'QPushButton {{ background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER}; border-radius: 8px; color: {theme.TEXT_MUTED}; font-size: 16px; padding: 0; }} QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}')
-        refresh_btn.clicked.connect(self._refresh_ports)
-        port_row.addWidget(port_lbl)
+        self._port_refresh_btn = QPushButton('↻')
+        self._port_refresh_btn.setFixedSize(34, 34)
+        self._port_refresh_btn.setToolTip('Refresh ports')
+        self._port_refresh_btn.setStyleSheet(self._small_btn_style())
+        self._port_refresh_btn.clicked.connect(self._refresh_ports)
+        port_row.addWidget(self._port_lbl)
         port_row.addWidget(self._port_combo, 1)
-        port_row.addWidget(refresh_btn)
+        port_row.addWidget(self._port_refresh_btn)
         card_layout.addLayout(port_row)
 
         baud_row = QHBoxLayout()
-        baud_lbl = QLabel('Baud Rate')
-        baud_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px;')
+        self._baud_lbl = QLabel('Baud Rate')
+        self._baud_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px;')
         self._baud_combo = QComboBox()
         self._baud_combo.addItems(['115200', '500000', '230400', '57600', '9600'])
-        baud_row.addWidget(baud_lbl)
+        baud_row.addWidget(self._baud_lbl)
         baud_row.addWidget(self._baud_combo, 1)
         card_layout.addLayout(baud_row)
 
         self._connect_btn = QPushButton('Connect')
         self._connect_btn.setFixedWidth(130)
-        self._connect_btn.setStyleSheet(f'''
-            QPushButton {{
-                background: {theme.ACCENT}; color: #000; border: none;
-                border-radius: 8px; padding: 10px 20px; font-weight: 700;
-            }}
-            QPushButton:hover {{ background: {theme.ACCENT_HOVER}; }}
-        ''')
+        self._connect_btn.setStyleSheet(self._connect_btn_style())
         self._connect_btn.clicked.connect(self._request_connect)
         card_layout.addWidget(self._connect_btn)
 
-        root.addWidget(card)
+        root.addWidget(self._serial_card)
 
         # ── LED Brightness card ──────────────────────────────────────────────
-        bright_card = QFrame()
-        bright_card.setMaximumWidth(560)
-        bright_card.setStyleSheet(f'''
-            QFrame {{
-                background-color: {theme.BG_CARD};
-                border: 1px solid {theme.BORDER};
-                border-radius: 12px;
-            }}
-            QLabel {{ background: transparent; color: {theme.TEXT}; }}
-            QSlider::groove:horizontal {{
-                background: {theme.BG_ELEVATED};
-                height: 6px;
-                border-radius: 3px;
-            }}
-            QSlider::handle:horizontal {{
-                background: {theme.ACCENT};
-                width: 16px;
-                height: 16px;
-                margin: -5px 0;
-                border-radius: 8px;
-            }}
-            QSlider::sub-page:horizontal {{
-                background: {theme.ACCENT};
-                border-radius: 3px;
-            }}
-        ''')
-        bright_layout = QVBoxLayout(bright_card)
+        self._bright_card = QFrame()
+        self._bright_card.setMaximumWidth(560)
+        self._bright_card_apply_style()
+        bright_layout = QVBoxLayout(self._bright_card)
         bright_layout.setContentsMargins(24, 20, 24, 24)
         bright_layout.setSpacing(14)
 
-        bright_title = QLabel('LED BRIGHTNESS')
-        bright_title.setStyleSheet(f'font-size: 11px; font-weight: 600; color: {theme.TEXT_MUTED}; letter-spacing: 1px;')
-        bright_layout.addWidget(bright_title)
+        self._bright_title = QLabel('LED BRIGHTNESS')
+        self._bright_title.setStyleSheet(f'font-size: 11px; font-weight: 600; color: {theme.TEXT_MUTED}; letter-spacing: 1px;')
+        bright_layout.addWidget(self._bright_title)
 
         slider_row = QHBoxLayout()
         self._bright_slider = QSlider(Qt.Horizontal)
@@ -421,76 +395,138 @@ class SettingsPage(QWidget):
         bright_layout.addLayout(slider_row)
 
         enc_timeout_row = QHBoxLayout()
-        enc_timeout_lbl = QLabel('Enc LED Off')
-        enc_timeout_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px; font-size: 13px;')
+        self._enc_timeout_lbl = QLabel('Enc LED Off')
+        self._enc_timeout_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px; font-size: 13px;')
         self._enc_timeout_combo = QComboBox()
         self._enc_timeout_combo.addItems(['2 seconds', '5 seconds', '10 seconds'])
         self._enc_timeout_combo.setCurrentText('2 seconds')
         self._enc_timeout_combo.currentIndexChanged.connect(self._on_encoder_led_timeout_changed)
-        enc_timeout_row.addWidget(enc_timeout_lbl)
+        enc_timeout_row.addWidget(self._enc_timeout_lbl)
         enc_timeout_row.addWidget(self._enc_timeout_combo, 1)
         bright_layout.addLayout(enc_timeout_row)
 
         effect_speed_row = QHBoxLayout()
-        effect_speed_lbl = QLabel('Effect Speed')
-        effect_speed_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px; font-size: 13px;')
+        self._effect_speed_lbl = QLabel('Effect Speed')
+        self._effect_speed_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px; font-size: 13px;')
         self._effect_speed_combo = QComboBox()
         self._effect_speed_combo.addItems(['5 ms — Ultra', '10 ms — Smooth', '20 ms — Medium', '33 ms — Standard', '50 ms — Light'])
         self._effect_speed_combo.setCurrentText('10 ms — Smooth')
         self._effect_speed_combo.currentIndexChanged.connect(self._on_effect_speed_changed)
-        effect_speed_row.addWidget(effect_speed_lbl)
+        effect_speed_row.addWidget(self._effect_speed_lbl)
         effect_speed_row.addWidget(self._effect_speed_combo, 1)
         bright_layout.addLayout(effect_speed_row)
 
-        root.addWidget(bright_card)
+        root.addWidget(self._bright_card)
 
         # ── Startup + Profile I/O card ───────────────────────────────────────
-        misc_card = QFrame()
-        misc_card.setMaximumWidth(560)
-        misc_card.setStyleSheet(f'''
+        self._misc_card = QFrame()
+        self._misc_card.setMaximumWidth(560)
+        self._misc_card_apply_style()
+        misc_layout = QVBoxLayout(self._misc_card)
+        misc_layout.setContentsMargins(24, 20, 24, 20)
+        misc_layout.setSpacing(14)
+
+        self._misc_title = QLabel('GENERAL')
+        self._misc_title.setStyleSheet(f'font-size: 11px; font-weight: 600; color: {theme.TEXT_MUTED}; letter-spacing: 1px;')
+        misc_layout.addWidget(self._misc_title)
+
+        self._startup_cb = QCheckBox('Start with Windows')
+        self._startup_cb.setChecked(self._read_startup_registry())
+        self._startup_cb.stateChanged.connect(self._on_startup_changed)
+        misc_layout.addWidget(self._startup_cb)
+
+        io_row = QHBoxLayout()
+        self._exp_btn = QPushButton('↓  Export Profile')
+        self._exp_btn.setStyleSheet(self._io_btn_style())
+        self._exp_btn.clicked.connect(self.export_requested)
+        self._imp_btn = QPushButton('↑  Import Profile')
+        self._imp_btn.setStyleSheet(self._io_btn_style())
+        self._imp_btn.clicked.connect(self.import_requested)
+        io_row.addWidget(self._exp_btn)
+        io_row.addWidget(self._imp_btn)
+        io_row.addStretch()
+        misc_layout.addLayout(io_row)
+
+        root.addWidget(self._misc_card)
+        root.addStretch()
+
+        self._refresh_ports()
+
+    def _card_style(self):
+        return f'''
+            QFrame {{
+                background-color: {theme.BG_CARD};
+                border: 1px solid {theme.BORDER};
+                border-radius: 12px;
+            }}
+            QLabel {{ background: transparent; color: {theme.TEXT}; }}
+            QComboBox {{ background-color: {theme.BG_ELEVATED}; }}
+        '''
+
+    def _serial_card_apply_style(self):
+        self._serial_card.setStyleSheet(self._card_style())
+
+    def _bright_card_apply_style(self):
+        self._bright_card.setStyleSheet(f'''
+            QFrame {{
+                background-color: {theme.BG_CARD};
+                border: 1px solid {theme.BORDER};
+                border-radius: 12px;
+            }}
+            QLabel {{ background: transparent; color: {theme.TEXT}; }}
+            QSlider::groove:horizontal {{ background: {theme.BG_ELEVATED}; height: 6px; border-radius: 3px; }}
+            QSlider::handle:horizontal {{ background: {theme.ACCENT}; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; }}
+            QSlider::sub-page:horizontal {{ background: {theme.ACCENT}; border-radius: 3px; }}
+        ''')
+
+    def _misc_card_apply_style(self):
+        self._misc_card.setStyleSheet(f'''
             QFrame {{
                 background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER};
                 border-radius: 12px;
             }}
             QLabel {{ background: transparent; color: {theme.TEXT}; }}
         ''')
-        misc_layout = QVBoxLayout(misc_card)
-        misc_layout.setContentsMargins(24, 20, 24, 20)
-        misc_layout.setSpacing(14)
 
-        misc_title = QLabel('GENERAL')
-        misc_title.setStyleSheet(f'font-size: 11px; font-weight: 600; color: {theme.TEXT_MUTED}; letter-spacing: 1px;')
-        misc_layout.addWidget(misc_title)
+    def _small_btn_style(self):
+        return (f'QPushButton {{ background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER}; '
+                f'border-radius: 8px; color: {theme.TEXT_MUTED}; font-size: 16px; padding: 0; }} '
+                f'QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}')
 
-        self._startup_cb = QCheckBox('Start with Windows')
-        self._startup_cb.setStyleSheet(f'color: {theme.TEXT}; font-size: 13px;')
-        self._startup_cb.setChecked(self._read_startup_registry())
-        self._startup_cb.stateChanged.connect(self._on_startup_changed)
-        misc_layout.addWidget(self._startup_cb)
+    def _connect_btn_style(self):
+        return (f'QPushButton {{ background: {theme.ACCENT}; color: #000; border: none; '
+                f'border-radius: 8px; padding: 10px 20px; font-weight: 700; }} '
+                f'QPushButton:hover {{ background: {theme.ACCENT_HOVER}; }}')
 
-        io_row = QHBoxLayout()
-        _btn_style = f'''
-            QPushButton {{
-                background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER_LIGHT};
-                border-radius: 8px; color: {theme.TEXT_MUTED}; padding: 7px 16px; font-size: 12px;
-            }}
-            QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}
-        '''
-        exp_btn = QPushButton('↓  Export Profile')
-        exp_btn.setStyleSheet(_btn_style)
-        exp_btn.clicked.connect(self.export_requested)
-        imp_btn = QPushButton('↑  Import Profile')
-        imp_btn.setStyleSheet(_btn_style)
-        imp_btn.clicked.connect(self.import_requested)
-        io_row.addWidget(exp_btn)
-        io_row.addWidget(imp_btn)
-        io_row.addStretch()
-        misc_layout.addLayout(io_row)
+    def _io_btn_style(self):
+        return (f'QPushButton {{ background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER_LIGHT}; '
+                f'border-radius: 8px; color: {theme.TEXT_MUTED}; padding: 7px 16px; font-size: 12px; }} '
+                f'QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}')
 
-        root.addWidget(misc_card)
-        root.addStretch()
+    def _lbl_muted(self):
+        return f'color: {theme.TEXT_MUTED}; min-width: 80px;'
 
-        self._refresh_ports()
+    def _section_lbl_style(self):
+        return f'font-size: 11px; font-weight: 600; color: {theme.TEXT_MUTED}; letter-spacing: 1px;'
+
+    def refresh_theme(self):
+        self._settings_line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        self._serial_card_apply_style()
+        self._bright_card_apply_style()
+        self._misc_card_apply_style()
+        self._section_lbl.setStyleSheet(self._section_lbl_style())
+        self._port_lbl.setStyleSheet(self._lbl_muted())
+        self._baud_lbl.setStyleSheet(self._lbl_muted())
+        self._port_refresh_btn.setStyleSheet(self._small_btn_style())
+        self._connect_btn.setStyleSheet(self._connect_btn_style())
+        self._bright_title.setStyleSheet(self._section_lbl_style())
+        self._bright_value_lbl.setStyleSheet(f'color: {theme.ACCENT}; font-weight: 600; font-size: 14px;')
+        self._enc_timeout_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px; font-size: 13px;')
+        self._effect_speed_lbl.setStyleSheet(f'color: {theme.TEXT_MUTED}; min-width: 80px; font-size: 13px;')
+        self._misc_title.setStyleSheet(self._section_lbl_style())
+        self._exp_btn.setStyleSheet(self._io_btn_style())
+        self._imp_btn.setStyleSheet(self._io_btn_style())
+        self._status.refresh_theme()
 
     def _refresh_ports(self):
         from serial_manager import list_ports
@@ -620,28 +656,24 @@ class TestModePage(QWidget):
 
         title = QLabel('Test Mode')
         title.setStyleSheet('font-size: 20px; font-weight: 700; letter-spacing: -0.3px;')
-        hint = QLabel('Press any key or encoder button — the active macro is shown below.')
-        hint.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_DIM};')
+        self._test_hint = QLabel('Press any key or encoder button — the active macro is shown below.')
+        self._test_hint.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_DIM};')
         root.addWidget(title)
-        root.addWidget(hint)
+        root.addWidget(self._test_hint)
 
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFixedHeight(1)
-        line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
-        root.addWidget(line)
+        self._test_line = QFrame()
+        self._test_line.setFrameShape(QFrame.HLine)
+        self._test_line.setFixedHeight(1)
+        self._test_line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        root.addWidget(self._test_line)
 
         grid = QGridLayout()
         grid.setSpacing(10)
+        self._key_name_lbls = {}
         for idx, key in enumerate(self.KEY_ORDER):
             card = QFrame()
             card.setFixedHeight(64)
-            card.setStyleSheet(f'''
-                QFrame {{
-                    background: {theme.BG_CARD}; border: 1px solid {theme.BORDER};
-                    border-radius: 10px;
-                }}
-            ''')
+            card.setStyleSheet(self._card_style())
             cl = QVBoxLayout(card)
             cl.setContentsMargins(10, 8, 10, 8)
             cl.setSpacing(3)
@@ -653,25 +685,40 @@ class TestModePage(QWidget):
             cl.addWidget(lbl_key)
             cl.addWidget(lbl_macro)
             self._cards[key] = (card, lbl_macro)
+            self._key_name_lbls[key] = lbl_key
             grid.addWidget(card, idx // 4, idx % 4)
 
         root.addLayout(grid)
 
-        log_lbl = QLabel('RECENT EVENTS')
-        log_lbl.setStyleSheet(f'font-size: 10px; font-weight: 600; color: {theme.TEXT_DIM}; letter-spacing: 1px; margin-top: 4px;')
-        root.addWidget(log_lbl)
+        self._log_lbl = QLabel('RECENT EVENTS')
+        self._log_lbl.setStyleSheet(f'font-size: 10px; font-weight: 600; color: {theme.TEXT_DIM}; letter-spacing: 1px; margin-top: 4px;')
+        root.addWidget(self._log_lbl)
 
         self._log = QListWidget()
         self._log.setFixedHeight(160)
-        self._log.setStyleSheet(f'''
-            QListWidget {{
-                background: {theme.BG_CARD}; border: 1px solid {theme.BORDER};
-                border-radius: 10px; color: {theme.TEXT}; font-size: 12px;
-                padding: 6px;
-            }}
-        ''')
+        self._log.setStyleSheet(self._log_style())
         root.addWidget(self._log)
         root.addStretch()
+
+    def _card_style(self):
+        return (f'QFrame {{ background: {theme.BG_CARD}; border: 1px solid {theme.BORDER}; '
+                f'border-radius: 10px; }}')
+
+    def _log_style(self):
+        return (f'QListWidget {{ background: {theme.BG_CARD}; border: 1px solid {theme.BORDER}; '
+                f'border-radius: 10px; color: {theme.TEXT}; font-size: 12px; padding: 6px; }}')
+
+    def refresh_theme(self):
+        self._test_hint.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_DIM};')
+        self._test_line.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        self._log_lbl.setStyleSheet(
+            f'font-size: 10px; font-weight: 600; color: {theme.TEXT_DIM}; letter-spacing: 1px; margin-top: 4px;')
+        self._log.setStyleSheet(self._log_style())
+        for key, (card, lbl_macro) in self._cards.items():
+            card.setStyleSheet(self._card_style())
+            self._key_name_lbls[key].setStyleSheet(
+                f'font-size: 10px; font-weight: 700; color: {theme.TEXT_DIM};')
+            lbl_macro.setStyleSheet(f'font-size: 11px; color: {theme.TEXT_MUTED};')
 
     def refresh_macros(self, macros_dict):
         for key, (card, lbl) in self._cards.items():
@@ -770,7 +817,6 @@ class MacroPadApp(QMainWindow):
         self._profile_save_timer.setSingleShot(True)
         self._profile_save_timer.setInterval(400)
         self._profile_save_timer.timeout.connect(self._save_current_profile)
-        self._tray = None
         self._fg_watcher = ForegroundWatcher(self)
         self._fg_watcher.app_changed.connect(self._on_foreground_app_changed)
         self._fg_watcher.start()
@@ -789,11 +835,11 @@ class MacroPadApp(QMainWindow):
 
         root.addWidget(self._build_sidebar())
 
-        divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setFixedWidth(1)
-        divider.setStyleSheet(f'background: {theme.BORDER}; border: none;')
-        root.addWidget(divider)
+        self._divider = QFrame()
+        self._divider.setFrameShape(QFrame.VLine)
+        self._divider.setFixedWidth(1)
+        self._divider.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        root.addWidget(self._divider)
 
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f'background: {theme.BG};')
@@ -816,39 +862,45 @@ class MacroPadApp(QMainWindow):
         self._settings_page.export_requested.connect(self._export_profile)
         self._settings_page.import_requested.connect(self._import_profile)
 
+        def _make_scroll(widget):
+            scroll = QScrollArea()
+            scroll.setWidget(widget)
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            scroll.setStyleSheet('QScrollArea { background: transparent; border: none; }')
+            return scroll
+
         for page in (self._macros_page, self._encoders_page,
                      self._settings_page, self._upload_page, self._test_page):
-            self._stack.addWidget(page)
+            self._stack.addWidget(_make_scroll(page))
 
         root.addWidget(self._stack, 1)
 
     def _build_sidebar(self):
-        sidebar = QFrame()
-        sidebar.setFixedWidth(216)
-        sidebar.setStyleSheet(f'''
-            QFrame {{
-                background-color: {theme.SIDEBAR_BG};
-                border: none;
-            }}
-        ''')
+        self._sidebar_collapsed = False
+        self._sidebar = QFrame()
+        self._sidebar.setFixedWidth(216)
+        self._sidebar.setStyleSheet(f'background-color: {theme.SIDEBAR_BG};')
 
-        layout = QVBoxLayout(sidebar)
+        layout = QVBoxLayout(self._sidebar)
         layout.setContentsMargins(0, 0, 0, 20)
         layout.setSpacing(0)
 
         # Logo area
-        logo_frame = QWidget()
-        logo_frame.setFixedHeight(68)
-        logo_frame.setStyleSheet(
+        self._logo_frame = QWidget()
+        self._logo_frame.setFixedHeight(68)
+        self._logo_frame.setStyleSheet(
             f'background: transparent; border-bottom: 1px solid {theme.BORDER};')
-        logo_row = QHBoxLayout(logo_frame)
+        logo_row = QHBoxLayout(self._logo_frame)
         logo_row.setContentsMargins(16, 0, 16, 0)
         logo_row.setSpacing(11)
 
-        icon_box = QLabel('◈')
-        icon_box.setFixedSize(32, 32)
-        icon_box.setAlignment(Qt.AlignCenter)
-        icon_box.setStyleSheet(f'''
+        self._icon_box = QLabel('◈')
+        self._icon_box.setFixedSize(32, 32)
+        self._icon_box.setAlignment(Qt.AlignCenter)
+        self._icon_box.setStyleSheet(f'''
             background: {theme.ACCENT}20; color: {theme.ACCENT};
             border: 1px solid {theme.ACCENT}40; border-radius: 8px;
             font-size: 16px;
@@ -856,26 +908,34 @@ class MacroPadApp(QMainWindow):
 
         title_col = QVBoxLayout()
         title_col.setSpacing(1)
-        name_lbl = QLabel('MacroPad')
-        name_lbl.setStyleSheet(
+        self._name_lbl = QLabel('MacroPad')
+        self._name_lbl.setStyleSheet(
             f'font-size: 14px; font-weight: 700; color: {theme.TEXT}; letter-spacing: 0.3px;')
-        sub_lbl = QLabel('Controller')
-        sub_lbl.setStyleSheet(
+        self._sub_lbl = QLabel('Controller')
+        self._sub_lbl.setStyleSheet(
             f'font-size: 10px; color: {theme.TEXT_DIM}; letter-spacing: 0.5px;')
-        title_col.addWidget(name_lbl)
-        title_col.addWidget(sub_lbl)
+        title_col.addWidget(self._name_lbl)
+        title_col.addWidget(self._sub_lbl)
 
-        logo_row.addWidget(icon_box)
+        self._collapse_btn = QPushButton('‹')
+        self._collapse_btn.setFixedSize(24, 24)
+        self._collapse_btn.setCursor(Qt.PointingHandCursor)
+        self._collapse_btn.setToolTip('Collapse sidebar')
+        self._collapse_btn.setStyleSheet(self._collapse_btn_style())
+        self._collapse_btn.clicked.connect(self._toggle_sidebar)
+
+        logo_row.addWidget(self._icon_box)
         logo_row.addLayout(title_col)
         logo_row.addStretch()
-        layout.addWidget(logo_frame)
+        logo_row.addWidget(self._collapse_btn)
+        layout.addWidget(self._logo_frame)
 
         # ── Profile selector ─────────────────────────────────────────────────
-        prof_frame = QWidget()
-        prof_frame.setFixedHeight(56)
-        prof_frame.setStyleSheet(
+        self._prof_frame = QWidget()
+        self._prof_frame.setFixedHeight(56)
+        self._prof_frame.setStyleSheet(
             f'background: transparent; border-bottom: 1px solid {theme.BORDER};')
-        prof_outer = QVBoxLayout(prof_frame)
+        prof_outer = QVBoxLayout(self._prof_frame)
         prof_outer.setContentsMargins(14, 6, 14, 6)
         prof_outer.setSpacing(4)
 
@@ -910,39 +970,39 @@ class MacroPadApp(QMainWindow):
             }}
             QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}
         '''
-        new_prof_btn = QPushButton('+')
-        new_prof_btn.setFixedSize(24, 24)
-        new_prof_btn.setToolTip('New profile')
-        new_prof_btn.setStyleSheet(_prof_btn_style)
-        new_prof_btn.clicked.connect(self._new_profile)
+        self._new_prof_btn = QPushButton('+')
+        self._new_prof_btn.setFixedSize(24, 24)
+        self._new_prof_btn.setToolTip('New profile')
+        self._new_prof_btn.setStyleSheet(_prof_btn_style)
+        self._new_prof_btn.clicked.connect(self._new_profile)
 
-        del_prof_btn = QPushButton('×')
-        del_prof_btn.setFixedSize(24, 24)
-        del_prof_btn.setToolTip('Delete profile')
-        del_prof_btn.setStyleSheet(_prof_btn_style)
-        del_prof_btn.clicked.connect(self._delete_profile)
+        self._del_prof_btn = QPushButton('×')
+        self._del_prof_btn.setFixedSize(24, 24)
+        self._del_prof_btn.setToolTip('Delete profile')
+        self._del_prof_btn.setStyleSheet(_prof_btn_style)
+        self._del_prof_btn.clicked.connect(self._delete_profile)
 
-        trig_btn = QPushButton('⚡')
-        trig_btn.setFixedSize(24, 24)
-        trig_btn.setToolTip('Auto-switch trigger apps')
-        trig_btn.setStyleSheet(_prof_btn_style)
-        trig_btn.clicked.connect(self._edit_trigger_apps)
+        self._trig_btn = QPushButton('⚡')
+        self._trig_btn.setFixedSize(24, 24)
+        self._trig_btn.setToolTip('Auto-switch trigger apps')
+        self._trig_btn.setStyleSheet(_prof_btn_style)
+        self._trig_btn.clicked.connect(self._edit_trigger_apps)
 
         prof_row.addWidget(self._profile_combo, 1)
-        prof_row.addWidget(new_prof_btn)
-        prof_row.addWidget(trig_btn)
-        prof_row.addWidget(del_prof_btn)
+        prof_row.addWidget(self._new_prof_btn)
+        prof_row.addWidget(self._trig_btn)
+        prof_row.addWidget(self._del_prof_btn)
         prof_outer.addLayout(prof_row)
-        layout.addWidget(prof_frame)
-        layout.addSpacing(4)
+        layout.addWidget(self._prof_frame)
+        layout.addSpacing(6)
 
         self._nav_btns = []
         for icon, label, idx in [
-            ('⌨', 'Macros', 0),
+            ('⌨', 'Macros',   0),
             ('⚙', 'Encoders', 1),
             ('◎', 'Settings', 2),
-            ('⬆', 'Upload', 3),
-            ('▶', 'Test', 4),
+            ('⬆', 'Upload',   3),
+            ('▶', 'Test',     4),
         ]:
             btn = NavButton(icon, label)
             btn.clicked.connect(lambda i=idx: self._navigate(i))
@@ -951,18 +1011,155 @@ class MacroPadApp(QMainWindow):
 
         layout.addStretch()
 
-        # Status area
-        status_frame = QWidget()
-        status_frame.setStyleSheet(
-            f'background: transparent; border-top: 1px solid {theme.BORDER};')
-        status_layout = QVBoxLayout(status_frame)
-        status_layout.setContentsMargins(14, 12, 14, 0)
+        # ── Bottom: separator + status + dark/light toggle ───────────────────
+        self._bottom_sep = QFrame()
+        self._bottom_sep.setFrameShape(QFrame.HLine)
+        self._bottom_sep.setFixedHeight(1)
+        self._bottom_sep.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        layout.addWidget(self._bottom_sep)
+
+        # Status row
+        self._status_frame = QWidget()
+        self._status_frame.setStyleSheet('background: transparent;')
+        status_layout = QVBoxLayout(self._status_frame)
+        status_layout.setContentsMargins(14, 8, 14, 4)
         status_layout.setSpacing(0)
         self._sidebar_status = StatusBadge()
         status_layout.addWidget(self._sidebar_status)
-        layout.addWidget(status_frame)
+        layout.addWidget(self._status_frame)
 
-        return sidebar
+        # Theme toggle row
+        self._toggle_row = QWidget()
+        self._toggle_row.setStyleSheet('background: transparent;')
+        toggle_layout = QHBoxLayout(self._toggle_row)
+        toggle_layout.setContentsMargins(14, 4, 14, 12)
+        toggle_layout.setSpacing(8)
+
+        self._mode_icon_lbl = QLabel('☀' if theme.get_mode() == 'light' else '🌙')
+        self._mode_icon_lbl.setStyleSheet(f'font-size: 14px; color: {theme.TEXT_DIM};')
+        self._mode_text_lbl = QLabel('Light mode' if theme.get_mode() == 'light' else 'Dark mode')
+        self._mode_text_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED};')
+
+        self._mode_toggle = ToggleSwitch()
+        self._mode_toggle.setChecked(theme.get_mode() == 'light')
+        self._mode_toggle.toggled.connect(lambda _: self._toggle_theme())
+
+        toggle_layout.addWidget(self._mode_icon_lbl)
+        toggle_layout.addWidget(self._mode_text_lbl, 1)
+        toggle_layout.addWidget(self._mode_toggle)
+        layout.addWidget(self._toggle_row)
+
+        return self._sidebar
+
+    def _collapse_btn_style(self):
+        return (f'QPushButton {{ background: transparent; border: none; '
+                f'color: {theme.TEXT_DIM}; font-size: 16px; font-weight: 700; padding: 0; }} '
+                f'QPushButton:hover {{ color: {theme.TEXT_MUTED}; }}')
+
+    def _toggle_sidebar(self):
+        self._sidebar_collapsed = not self._sidebar_collapsed
+        collapsed = self._sidebar_collapsed
+
+        if collapsed:
+            self._sidebar.setFixedWidth(56)
+            self._collapse_btn.setText('›')
+            self._collapse_btn.setToolTip('Expand sidebar')
+        else:
+            self._sidebar.setFixedWidth(216)
+            self._collapse_btn.setText('‹')
+            self._collapse_btn.setToolTip('Collapse sidebar')
+
+        # Logo area
+        self._name_lbl.setVisible(not collapsed)
+        self._sub_lbl.setVisible(not collapsed)
+
+        # Profile section
+        self._prof_frame.setVisible(not collapsed)
+
+        # Nav buttons
+        for btn in self._nav_btns:
+            btn.set_collapsed(collapsed)
+
+        # Theme toggle row
+        self._toggle_row.setVisible(not collapsed)
+
+    def _theme_btn_style(self):
+        return f'''
+            QPushButton {{
+                background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER_LIGHT};
+                border-radius: 8px; color: {theme.TEXT_MUTED}; font-size: 16px; padding: 0;
+            }}
+            QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}
+        '''
+
+    def _toggle_theme(self):
+        from PyQt5.QtWidgets import QApplication
+        new_mode = 'light' if theme.get_mode() == 'dark' else 'dark'
+        theme.set_mode(new_mode)
+        QApplication.instance().setStyleSheet(theme.build_stylesheet())
+        self._refresh_all_theme()
+
+    def _refresh_all_theme(self):
+        # Sidebar background — unscoped so it applies directly to this widget
+        border_right = f'; border-right: 1px solid {theme.BORDER}' if theme.get_mode() == 'light' else ''
+        self._sidebar.setStyleSheet(f'background-color: {theme.SIDEBAR_BG}{border_right};')
+        self._logo_frame.setStyleSheet(f'background: transparent; border-bottom: 1px solid {theme.BORDER};')
+        self._icon_box.setStyleSheet(f'''
+            background: {theme.ACCENT}20; color: {theme.ACCENT};
+            border: 1px solid {theme.ACCENT}40; border-radius: 8px; font-size: 16px;
+        ''')
+        self._name_lbl.setStyleSheet(f'font-size: 14px; font-weight: 700; color: {theme.TEXT}; letter-spacing: 0.3px;')
+        self._sub_lbl.setStyleSheet(f'font-size: 10px; color: {theme.TEXT_DIM}; letter-spacing: 0.5px;')
+        self._prof_frame.setStyleSheet(f'background: transparent; border-bottom: 1px solid {theme.BORDER};')
+        self._bottom_sep.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        self._status_frame.setStyleSheet('background: transparent;')
+        self._divider.setStyleSheet(f'background: {theme.BORDER}; border: none;')
+        self._stack.setStyleSheet(f'background: {theme.BG};')
+
+        # Profile combo
+        self._profile_combo.setStyleSheet(f'''
+            QComboBox {{
+                background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER_LIGHT};
+                border-radius: 6px; color: {theme.TEXT}; padding: 2px 22px 2px 8px; font-size: 12px;
+            }}
+            QComboBox:hover {{ border-color: {theme.ACCENT}; }}
+            QComboBox QAbstractItemView {{
+                background: {theme.BG_CARD}; border: 1px solid {theme.BORDER_LIGHT};
+                color: {theme.TEXT}; selection-background-color: {theme.ACCENT}; selection-color: #000;
+            }}
+        ''')
+
+        _prof_btn_style = f'''
+            QPushButton {{
+                background: {theme.BG_ELEVATED}; border: 1px solid {theme.BORDER_LIGHT};
+                border-radius: 6px; color: {theme.TEXT_MUTED}; font-size: 14px; padding: 0;
+            }}
+            QPushButton:hover {{ border-color: {theme.ACCENT}; color: {theme.ACCENT}; }}
+        '''
+        self._new_prof_btn.setStyleSheet(_prof_btn_style)
+        self._del_prof_btn.setStyleSheet(_prof_btn_style)
+        self._trig_btn.setStyleSheet(_prof_btn_style)
+
+        # Theme toggle row
+        is_light = theme.get_mode() == 'light'
+        self._mode_icon_lbl.setText('☀' if is_light else '🌙')
+        self._mode_icon_lbl.setStyleSheet(f'font-size: 14px; color: {theme.TEXT_DIM};')
+        self._mode_text_lbl.setText('Light mode' if is_light else 'Dark mode')
+        self._mode_text_lbl.setStyleSheet(f'font-size: 12px; color: {theme.TEXT_MUTED};')
+        self._mode_toggle.setChecked(is_light)
+        self._mode_toggle.update()
+        self._collapse_btn.setStyleSheet(self._collapse_btn_style())
+
+        # Nav buttons and status
+        for btn in self._nav_btns:
+            btn.refresh_theme()
+        self._sidebar_status.refresh_theme()
+
+        # Pages
+        self._macros_page.refresh_theme()
+        self._encoders_page.refresh_theme()
+        self._settings_page.refresh_theme()
+        self._test_page.refresh_theme()
 
     def _navigate(self, idx):
         self._stack.setCurrentIndex(idx)
@@ -998,7 +1195,6 @@ class MacroPadApp(QMainWindow):
         self._profile_combo.setCurrentText(profile_manager.get_active_name(self._profile_data))
         self._profile_combo.blockSignals(False)
         self._profile_combo.currentTextChanged.connect(self._on_profile_changed)
-        self._setup_tray()
 
         settings = _load_settings()
         port            = settings[0] if settings else 'COM6'
@@ -1011,6 +1207,14 @@ class MacroPadApp(QMainWindow):
         self._settings_page.set_brightness_pct(brightness_pct)
         self._settings_page.set_encoder_led_timeout_seconds(enc_led_timeout)
         self._settings_page.set_effect_speed_ms(effect_speed)
+
+        saved_mode = settings[5] if settings and len(settings) > 5 else 'dark'
+        if saved_mode != theme.get_mode():
+            theme.set_mode(saved_mode)
+            from PyQt5.QtWidgets import QApplication
+            QApplication.instance().setStyleSheet(theme.build_stylesheet())
+            self._refresh_all_theme()
+
         self._do_connect(port, baud)
         self._navigate(0)
 
@@ -1032,7 +1236,8 @@ class MacroPadApp(QMainWindow):
             self._settings_page.set_status(True, port)
             _save_settings(port, str(baud_rate), self._settings_page._bright_slider.value(),
                            self._settings_page.get_encoder_led_timeout_seconds(),
-                           self._settings_page.get_effect_speed_ms())
+                           self._settings_page.get_effect_speed_ms(),
+                           theme.get_mode())
             # Push brightness then LED state after Arduino has had time to boot
             QTimer.singleShot(2500, self._send_initial_brightness)
             QTimer.singleShot(2600, self._send_initial_led_state)
@@ -1189,6 +1394,7 @@ class MacroPadApp(QMainWindow):
             self._settings_page._bright_slider.value(),
             self._settings_page.get_encoder_led_timeout_seconds(),
             self._settings_page.get_effect_speed_ms(),
+            theme.get_mode(),
         )
 
     def _flash_red(self, enc_id):
@@ -1317,50 +1523,6 @@ class MacroPadApp(QMainWindow):
             QTimer.singleShot(2500, self._send_initial_brightness)
             QTimer.singleShot(2600, self._send_initial_led_state)
             QTimer.singleShot(3200, self._sync_mute_states)
-
-    # ── System tray ───────────────────────────────────────────────────────────
-    def _setup_tray(self):
-        from utils import resource_path
-        from PyQt5.QtGui import QIcon
-        icon = QIcon(resource_path('Assets/Images/icon.ico'))
-        self._tray = QSystemTrayIcon(icon, self)
-        self._tray_menu = QMenu()
-        self._tray_profile_menu = QMenu('Profile')
-        self._tray_menu.addMenu(self._tray_profile_menu)
-        self._refresh_tray_profiles()
-        self._tray_menu.addSeparator()
-        show_act = QAction('Show', self)
-        show_act.triggered.connect(self._show_from_tray)
-        self._tray_menu.addAction(show_act)
-        quit_act = QAction('Quit', self)
-        quit_act.triggered.connect(self._quit_app)
-        self._tray_menu.addAction(quit_act)
-        self._tray.setContextMenu(self._tray_menu)
-        self._tray.activated.connect(self._on_tray_activated)
-        self._tray.show()
-
-    def _refresh_tray_profiles(self):
-        self._tray_profile_menu.clear()
-        active = profile_manager.get_active_name(self._profile_data)
-        for name in profile_manager.get_names(self._profile_data):
-            act = QAction(('✓  ' if name == active else '    ') + name, self)
-            act.triggered.connect(lambda checked=False, n=name: self._on_profile_changed(n))
-            self._tray_profile_menu.addAction(act)
-
-    def _on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self._show_from_tray()
-
-    def _show_from_tray(self):
-        self.show()
-        self.raise_()
-        self.activateWindow()
-
-    def _quit_app(self):
-        self._tray.hide()
-        self._save_current_profile()
-        import sys
-        sys.exit(0)
 
     # ── Export / Import profiles ──────────────────────────────────────────────
     def _export_profile(self):
@@ -1503,7 +1665,6 @@ class MacroPadApp(QMainWindow):
         self._profile_combo.setCurrentText(name)
         self._profile_combo.blockSignals(False)
         self._apply_profile(profile_manager.get_active(self._profile_data))
-        self._refresh_tray_profiles()
         self._switching_profile = False
 
     def _new_profile(self):
@@ -1549,11 +1710,6 @@ class MacroPadApp(QMainWindow):
         self._switching_profile = False
 
     def closeEvent(self, event):
-        if self._tray and self._tray.isVisible():
-            self.hide()
-            event.ignore()
-            return
-
         self._fg_watcher.stop()
         # Stop all encoder timers so no new volume threads are spawned
         for timer in self._enc_timers.values():
@@ -1586,7 +1742,7 @@ def _ensure_data_dir():
     os.makedirs(os.path.dirname(get_data_path('x')), exist_ok=True)
 
 
-def _save_settings(port, baud_rate, brightness_pct=10, enc_led_timeout_secs=2, effect_speed_ms=10):
+def _save_settings(port, baud_rate, brightness_pct=10, enc_led_timeout_secs=2, effect_speed_ms=10, theme_mode='dark'):
     _ensure_data_dir()
     with open(get_data_path('settings_serial.json'), 'w') as f:
         json.dump({
@@ -1595,6 +1751,7 @@ def _save_settings(port, baud_rate, brightness_pct=10, enc_led_timeout_secs=2, e
             'brightness_pct': brightness_pct,
             'enc_led_timeout_secs': enc_led_timeout_secs,
             'effect_speed_ms': effect_speed_ms,
+            'theme_mode': theme_mode,
         }, f)
 
 
@@ -1608,6 +1765,7 @@ def _load_settings():
             data.get('brightness_pct', 10),
             data.get('enc_led_timeout_secs', 2),
             data.get('effect_speed_ms', 10),
+            data.get('theme_mode', 'dark'),
         )
     except (FileNotFoundError, json.JSONDecodeError):
         return None

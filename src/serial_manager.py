@@ -58,16 +58,21 @@ class SerialManager:
             self.serial_port = None
 
     def _run(self):
+        _logged_error = None
         while self.running:
             if not self._connected:
                 try:
                     self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=1)
                     self._connected = True
+                    _logged_error = None
                     logging.info(f'Connected to {self.port} @ {self.baud_rate}')
                     if self.connected_callback:
                         self.connected_callback(True)
                 except serial.SerialException as e:
-                    logging.warning(f'Cannot open {self.port}: {e}')
+                    err = str(e)
+                    if err != _logged_error:   # only log when the error message changes
+                        logging.warning(f'Cannot open {self.port}: {e}')
+                        _logged_error = err
                     self._stop_event.wait(self._RECONNECT_DELAY)
                     continue
 

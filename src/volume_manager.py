@@ -66,6 +66,20 @@ class VolumeManager:
             break
         return False
 
+    def get_volume(self, app_name):
+        """Return current volume 0-100 without changing it, or None if not found."""
+        if not app_name:
+            return None
+        for sessions in (self._sessions(), self._sessions(force=True)):
+            for session in sessions:
+                if session.Process and session.Process.name() == app_name:
+                    try:
+                        return round(session.SimpleAudioVolume.GetMasterVolume() * 100)
+                    except Exception:
+                        pass
+            break
+        return None
+
     def toggle_mute(self, app_name):
         """Toggle mute for a specific app. Returns new mute state or None on failure."""
         if not app_name:
