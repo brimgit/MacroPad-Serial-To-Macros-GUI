@@ -1,142 +1,197 @@
-# MacroPad Serial GUI
+# MacroPad
 
-A full-featured Python desktop app for controlling a custom ESP32-based macropad over serial. Configure macros, encoder volume control, RGB LED effects, and profiles — all from a clean dark UI.
+A full-featured desktop app for controlling a custom ESP32-based macropad over serial. Built with a **React + Vite** frontend running inside a **pywebview** window, backed by a pure-Python layer for serial communication, audio control, and macro execution.
 
 ---
 
 ## Features
 
 ### Macros
-- Assign **press** and **hold** actions to all 8 keys and 4 encoder buttons independently
+- Assign **press** and **hold** actions to all 8 keys and 4 encoder buttons
+- **Configurable hold duration** per key — set the exact milliseconds before a hold fires (100–3000 ms, default 500 ms)
 - Supported macro types:
-  - **Keyboard Key** — any letter, number, or special key
-  - **Media Control** — play/pause, next/previous track, stop, volume up/down
-  - **Function Key** — F1–F24
-  - **Modifier Key** — Ctrl, Shift, Alt, Win, and common combos (Ctrl+C, Alt+Tab, etc.)
-  - **Type Text** — types a free-form string of text
-  - **Mute App** — toggles mute for the app assigned to that encoder
-  - **Recorded** — records and replays a full keyboard sequence
+  | Type | Description |
+  |---|---|
+  | Keyboard Key | Any letter, number, or special key |
+  | Media Control | Play/pause, next/prev track, volume up/down, mute |
+  | Function Key | F1–F24 |
+  | Modifier Key | Ctrl, Shift, Alt, Win, and combos (Ctrl+C, Alt+Tab, etc.) |
+  | Type Text | Types a free-form string |
+  | Mute App | Toggles mute for the encoder's assigned audio source |
+  | Recorded | Records a full keyboard sequence and replays it with original timing |
 
 ### Encoders
-- Each of the 4 encoders controls the volume of a **selectable audio app**
-- Volume percentage shown live next to the LED bar
-- **Default mode**: encoder button auto-mutes/unmutes the assigned app with no macro needed
-- **Mute visual feedback**:
-  - LED ring turns **solid red** when muted
-  - Turning the encoder while muted **flashes red 3 times** to indicate it's muted
-  - Mute state is **detected on startup** — if the app is already muted, the ring shows red immediately
+- Each of the 4 encoders independently controls a volume source:
+  - **Any audio app** (Discord, Spotify, browsers, games, etc.)
+  - **🔊 Master Volume** — system-wide output level
+  - **🎤 Microphone** — default capture device input level
+- Each app can only be assigned to **one encoder at a time** — assigning it to another automatically clears the previous one
+- Encoder **button macros** (press + hold) assignable per encoder, same macro types as keys
+- **Mute toggle**: pressing the encoder button with "Mute App" assigned mutes/unmutes the source
+  - LED ring turns **solid red** while muted
+  - Turning the encoder while muted **flashes red continuously** for as long as you're turning, then gives 3 final blinks to confirm it's still muted
+  - Unmuting mid-flash immediately restores the normal color and volume display
+  - Mute state is **read on connect** — if the app is already muted when the app starts, the ring shows red right away
 
-### LED Lighting
-**Per-encoder LED modes** (color shown while encoder is active):
-- **Default** — green→red gradient bar showing volume level
-- **Solid** — custom single color
-- **Fade** — two-color gradient with adjustable blend point
-
-**Idle animations** (plays when the encoder hasn't been turned recently):
-- **Off** — strip turns off after the configured timeout
-- **Breathe** — smooth sine pulse using a natural easing curve
-- **Wave** — ripple effect rolling across the strip
-- **Rainbow** — scrolling hue band across all LEDs
-- **Chase** — glowing dot with a fading trail
-- **Color Cycle** — all LEDs slowly drift through the full color spectrum together
-- **Sparkle** — random twinkling in the encoder's assigned color
+### LED Ring
+Each encoder card in the app shows a live **10-LED ring preview** that mirrors the physical device:
+- **Volume display** — lit LEDs proportional to current volume %, shown for 2 s after each turn
+- **Idle animations** — plays when encoder hasn't been turned recently:
+  | Effect | Description |
+  |---|---|
+  | Off | Strip turns off after timeout |
+  | Breathe | All LEDs pulse in and out together |
+  | Wave | Brightness ripples across the ring |
+  | Rainbow | Hue band scrolls around the ring |
+  | Chase | Bright spot bounces back and forth |
+  | Color Cycle | All LEDs drift through the full spectrum |
+  | Sparkle | Random LEDs flash in the encoder's color |
+- **LED modes** (color while active):
+  - **Default** — green→red gradient tracking volume
+  - **Solid** — single custom color
+  - **Fade** — gradient between two custom colors
 
 ### Profiles
-- Create, switch, and delete **named profiles**
-- Each profile stores: all key macros, encoder button macros, encoder app assignments, LED mode/colors, and idle animation
-- **Auto-switch by app** — assign `.exe` names to a profile; the profile activates automatically when that app gains focus
-- **Import / Export** profiles as `.json` files to share or back up
-- Profile selector in the sidebar with quick-switch from the **system tray**
+- Create, rename, and delete **named profiles**
+- Each profile stores: all key macros, encoder button macros, encoder app assignments, LED mode/colors/effects
+- **Import / Export** profiles as `.json` files
 
 ### Settings
 | Setting | Description |
 |---|---|
 | Serial Port & Baud Rate | Connect to the MacroPad over any COM port |
-| LED Brightness | Global brightness slider (1–100%) |
-| Enc LED Off | How long after last turn before the encoder strip turns off (2 / 5 / 10 s) |
-| Effect Speed | Animation update rate: 5 ms (Ultra) → 50 ms (Light) |
-| Start with Windows | Adds the app to the Windows registry startup key |
-| Export / Import Profile | Save or load a profile as a `.json` file |
+| LED Brightness | Global brightness (1–100%) sent to device on change |
+| Enc LED Off | Idle timeout before encoder strip turns off (2 / 5 / 10 s) |
+| Effect Speed | Animation frame rate: 5 ms (Ultra) → 50 ms (Light) |
+| Export / Import Profile | Save or load the active profile as a `.json` file |
 
 ### Other
-- **System tray** — closing the window minimizes to tray; right-click to switch profiles or quit
-- **Auto-reconnect** — if the device is unplugged, the app reconnects automatically and restores LED state
-- **Test Mode** — dedicated page showing all key assignments with live highlighting and an event log when keys are pressed
-- **Firmware Upload** — upload `.ino` sketches directly from within the app via Arduino CLI
+- **Auto-reconnect** — if the device is unplugged, the app reconnects automatically and restores all LED state
+- **Test Mode** — shows all 8 key assignments with live flash highlighting and a scrolling event log when keys are pressed
+- **Firmware Upload** — compile and flash `.ino` sketches directly from the app via Arduino CLI, with a live log output
 
 ---
 
 ## Hardware
 
-The PCB was designed in **KiCad**. Schematic and board files are included in `PCB_files/`. Gerber files are also provided so you can order directly from any PCB manufacturer.
+PCB designed in **KiCad** — schematic, board files, and Gerber files are in `PCB_files/`. Order directly from any PCB manufacturer with the Gerbers.
 
 **ESP32** microcontroller with:
-- 4× rotary encoders (with push button)
-- 8× mechanical keys (3×4 matrix)
-- 4× NeoPixel LED strips (10 LEDs each)
+- 4× rotary encoders with push button
+- 8× mechanical keys
+- 4× NeoPixel LED strips (10 LEDs each, surrounding each encoder knob)
 
 ---
 
 ## Running from Source
 
-**Requirements:** Python 3.10+
+### Requirements
+- Python 3.10+
+- Node.js 18+ (for the frontend)
+
+### Install dependencies
 
 ```bash
 git clone https://github.com/brimgit/MacroPad-Serial-To-Macros-GUI
 cd MacroPad-Serial-To-Macros-GUI
+
+# Python dependencies
 pip install -r requirements.txt
-python MacroPad.pyw
+
+# Frontend dependencies
+cd frontend
+npm install
+cd ..
 ```
 
-Or on Windows, double-click `Launch MacroPad.vbs` to run without a console window.
+### Development mode (hot-reload)
 
-### Dependencies
+```bash
+# Terminal 1 — Vite dev server
+cd frontend
+npm run dev
+
+# Terminal 2 — Python backend (connects to Vite at localhost:5173)
+python src/main_webview.py --dev
+```
+
+### Production mode (no Node.js needed at runtime)
+
+```bash
+# Build the frontend once
+cd frontend
+npm run build
+cd ..
+
+# Run the app
+python src/main_webview.py
+```
+
+### Python dependencies
+
 | Package | Purpose |
 |---|---|
-| PyQt5 | GUI framework |
+| pywebview | Native window hosting the React frontend |
 | pyserial | Serial communication with ESP32 |
-| keyboard | Macro execution |
-| pycaw | Windows audio session control |
-| psutil | Process name detection for auto-profile switching |
+| keyboard | Macro execution and keystroke recording |
+| pycaw | Windows audio session / endpoint volume control |
+
+### Frontend stack
+
+| Package | Purpose |
+|---|---|
+| React 19 | UI framework |
+| Vite | Build tool and dev server |
+| Tailwind CSS | Base styles |
+
+---
+
+## Project Structure
+
+```
+src/
+  main_webview.py   # Entry point — creates pywebview window, connects API
+  api.py            # Python API exposed to React via pywebview JS bridge
+  macro_manager.py  # Macro storage, persistence, and execution
+  profile_manager.py# Profile CRUD and JSON persistence
+  serial_manager.py # Serial connection, auto-reconnect, data dispatch
+  volume_manager.py # Per-app, master, and microphone volume control (pycaw)
+  utils.py          # Path helpers for PyInstaller and data directory
+
+frontend/
+  src/
+    App.jsx                     # Root component, state, event listeners
+    components/
+      Sidebar.jsx               # Navigation, profile switcher, theme toggle
+      MacroModal.jsx            # Shared macro assignment modal (all pages)
+    pages/
+      MacrosPage.jsx            # 2×4 key grid with press/hold assignment
+      EncodersPage.jsx          # Encoder cards with LED ring, volume, button macros
+      SettingsPage.jsx          # Serial, brightness, LED settings, import/export
+      UploadPage.jsx            # Arduino CLI firmware upload with live log
+      TestPage.jsx              # Live key-press display and event log
+
+Data/
+  profiles.json     # All profiles (macros, encoders, settings per profile)
+
+PCB_files/          # KiCad schematic, board, and Gerber files
+MacroPad_Arduino_Code/  # ESP32 firmware
+```
 
 ---
 
 ## Firmware
 
-The Arduino sketch is in `MacroPad_Arduino_Code/`. Upload it to your ESP32 using the **Upload** page in the app (requires Arduino CLI installed) or via the Arduino IDE.
+The Arduino sketch is in `MacroPad_Arduino_Code/`. Upload it via the **Upload Firmware** page in the app (requires Arduino CLI) or via the Arduino IDE.
 
 The firmware handles:
-- Encoder tick detection and serial output
-- Key matrix scanning with hold-duration reporting
-- NeoPixel LED control with 6 idle animation effects at configurable frame rate
-- Serial command protocol for color, brightness, effects, and timeouts
-
----
-
-## Development
-
-```bash
-# Clone and set up
-git clone https://github.com/brimgit/MacroPad-Serial-To-Macros-GUI
-cd MacroPad-Serial-To-Macros-GUI
-pip install -r requirements.txt
-
-# Source layout
-src/
-  gui.py            # Main window, pages, MacroPadApp
-  widgets.py        # EncoderCard, KeyCard, MacroAssignDialog, LEDPreview
-  macro_manager.py  # Macro storage and execution
-  profile_manager.py# Profile CRUD and persistence
-  serial_manager.py # Serial connection and auto-reconnect
-  volume_manager.py # Windows audio session control
-  auto_profile.py   # Foreground window watcher for auto profile switching
-  theme.py          # Colors and stylesheet
-```
-
-Pull requests are welcome. Please test changes against a live device before submitting.
+- Encoder tick detection → `E:{id}:{+/-}` serial output
+- Key press/release with hold-duration reporting → `KP:{key}:UP:{ms}`
+- NeoPixel LED control: color modes, brightness, idle animations, effect speed, timeout
+- Serial command protocol: `BRIGHT:`, `{n}:color(r,g,b)`, `{n}:colorfade(...)`, `EFFECT:{n}:{id}`, `ENC_TIMEOUT:`, `EFFECT_SPEED:`
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](https://opensource.org/license/MIT).
+[MIT License](https://opensource.org/license/MIT)

@@ -518,51 +518,86 @@ class MacroPadAPI:
             self._serial_send(f'{n}:color(200,0,0)')
             self._serial_send(f'{n}:100')
         else:
-            enc = encoders[enc_id]
-            self._serial_send(_color_cmd(enc_id, enc))
-            vol = self._serial_mgr.volume_manager.get_volume(app) or 0
-            self._serial_send(f'{n}:{vol}')
+            # Restore normal LED — use shared helper so flash thread also benefits
+            self._restore_encoder_led(enc_id)
         self._push('mute_change', {'id': enc_id, 'muted': bool(muted), 'app': app})
 
     def _muted_continuous_flash(self, enc_id: int):
         """
         Continuous fast blink while the encoder is being turned.
         Transitions to 3 slow final blinks once turns stop for 500 ms.
+        Exits immediately if the encoder is unmuted mid-flash.
         """
-        IDLE_TIMEOUT = 0.50   # seconds of no turns → start final blinks
-        FAST_ON      = 0.10   # on-time while actively turning
-        FAST_OFF     = 0.10   # off-time while actively turning
+        IDLE_TIMEOUT = 0.50
+        FAST_ON      = 0.10
+        FAST_OFF     = 0.10
         FINAL_ON     = 0.25
         FINAL_OFF    = 0.20
 
         n = enc_id + 1
         self._enc_muted_flashing[enc_id] = True
 
+        def still_muted():
+            return self._enc_muted.get(enc_id, False)
+
         try:
             # ── continuous phase ──────────────────────────────────────────────
-            while True:
-                last = self._enc_muted_last_turn.get(enc_id, 0)
-                if time.monotonic() - last >= IDLE_TIMEOUT:
+            while still_muted():
+                if time.monotonic() - self._enc_muted_last_turn.get(enc_id, 0) >= IDLE_TIMEOUT:
                     break
                 self._serial_send(f'{n}:color(200,0,0)')
                 self._serial_send(f'{n}:100')
                 time.sleep(FAST_ON)
+                if not still_muted():
+                    return
                 self._serial_send(f'{n}:0')
                 time.sleep(FAST_OFF)
 
-            # ── 3 final blinks ────────────────────────────────────────────────
+            # ── 3 final blinks (only if still muted) ─────────────────────────
             for _ in range(3):
+                if not still_muted():
+                    return
                 self._serial_send(f'{n}:color(200,0,0)')
                 self._serial_send(f'{n}:100')
                 time.sleep(FINAL_ON)
+                if not still_muted():
+                    return
                 self._serial_send(f'{n}:0')
                 time.sleep(FINAL_OFF)
 
-            # Settle: solid red (still muted)
-            self._serial_send(f'{n}:color(200,0,0)')
-            self._serial_send(f'{n}:100')
+            # Settle to solid red if still muted
+            if still_muted():
+                self._serial_send(f'{n}:color(200,0,0)')
+                self._serial_send(f'{n}:100')
         finally:
             self._enc_muted_flashing[enc_id] = False
+            # Guard against the race where a red command was sent just before
+            # _execute_mute_app toggled the mute state — re-send normal LED state.
+            if not still_muted():
+                self._restore_encoder_led(enc_id)
+
+    def _restore_encoder_led(self, enc_id: int):
+        """Re-send the configured color + current volume for an encoder."""
+        try:
+            active   = profile_manager.get_active(self._profile_data)
+            encoders = active.get('encoders', [])
+            if enc_id >= len(encoders):
+                return
+            enc = encoders[enc_id]
+            self._serial_send(_color_cmd(enc_id, enc))
+            app = enc.get('app', '')
+            if app and self._serial_mgr:
+                from volume_manager import MASTER_APP, MIC_APP
+                vm = self._serial_mgr.volume_manager
+                if app == MASTER_APP:
+                    vol = vm.get_master_volume() or 0
+                elif app == MIC_APP:
+                    vol = vm.get_mic_volume() or 0
+                else:
+                    vol = vm.get_volume(app) or 0
+                self._serial_send(f'{enc_id + 1}:{vol}')
+        except Exception as e:
+            log.debug(f'_restore_encoder_led failed for enc {enc_id}: {e}')
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _load_settings(self):
