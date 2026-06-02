@@ -5,7 +5,7 @@ import logging
 from serial.tools import list_ports as sp_list_ports
 from volume_manager import VolumeManager
 
-logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 
 def list_ports():
@@ -17,16 +17,16 @@ class SerialManager:
 
     def __init__(self, data_callback, port='COM20', baud_rate=115200,
                  connected_callback=None):
-        self.data_callback = data_callback
+        self.data_callback      = data_callback
         self.connected_callback = connected_callback
-        self.port = port
-        self.baud_rate = baud_rate
-        self.serial_port = None
-        self.running = False
-        self.thread = None
-        self.volume_manager = VolumeManager()
-        self._connected = False
-        self._stop_event = threading.Event()
+        self.port               = port
+        self.baud_rate          = baud_rate
+        self.serial_port        = None
+        self.running            = False
+        self.thread             = None
+        self.volume_manager     = VolumeManager()
+        self._connected         = False
+        self._stop_event        = threading.Event()
         self.start()
 
     @property
@@ -37,12 +37,12 @@ class SerialManager:
         self.stop()
         self._stop_event.clear()
         self.running = True
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread  = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
     def stop(self):
         self.running = False
-        self._stop_event.set()  # wake up any sleeping wait() immediately
+        self._stop_event.set()
         if self.thread is not None:
             self.thread.join(timeout=4)
             self.thread = None
@@ -54,7 +54,7 @@ class SerialManager:
             try:
                 self.serial_port.close()
             except Exception:
-                pass
+                pass   # best-effort cleanup
             self.serial_port = None
 
     def _run(self):
@@ -63,15 +63,15 @@ class SerialManager:
             if not self._connected:
                 try:
                     self.serial_port = serial.Serial(self.port, self.baud_rate, timeout=1)
-                    self._connected = True
-                    _logged_error = None
-                    logging.info(f'Connected to {self.port} @ {self.baud_rate}')
+                    self._connected  = True
+                    _logged_error    = None
+                    log.info(f'Connected to {self.port} @ {self.baud_rate}')
                     if self.connected_callback:
                         self.connected_callback(True)
                 except serial.SerialException as e:
                     err = str(e)
-                    if err != _logged_error:   # only log when the error message changes
-                        logging.warning(f'Cannot open {self.port}: {e}')
+                    if err != _logged_error:
+                        log.warning(f'Cannot open {self.port}: {e}')
                         _logged_error = err
                     self._stop_event.wait(self._RECONNECT_DELAY)
                     continue
@@ -83,17 +83,17 @@ class SerialManager:
                         decoded = line.decode('utf-8', errors='replace').strip()
                         if decoded:
                             self.data_callback(decoded)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        log.debug(f'Error dispatching serial data: {e}')
             except serial.SerialException as e:
-                logging.warning(f'Serial read error: {e}')
+                log.warning(f'Serial read error: {e}')
                 self._close_port()
                 if self.connected_callback:
                     self.connected_callback(False)
                 self._stop_event.wait(self._RECONNECT_DELAY)
 
     def update_settings(self, port, baud_rate):
-        self.port = port
+        self.port      = port
         self.baud_rate = baud_rate
         self.start()
 
@@ -104,7 +104,7 @@ class SerialManager:
                     data = data.encode('utf-8')
                 self.serial_port.write(data)
                 self.serial_port.flush()
-                logging.info(f'TX: {data.strip()}')
+                log.debug(f'TX: {data.strip()}')
             except serial.SerialException as e:
-                logging.warning(f'Send error: {e}')
+                log.warning(f'Send error: {e}')
                 self._close_port()

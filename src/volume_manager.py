@@ -1,10 +1,14 @@
 import time
+import logging
+
+log = logging.getLogger(__name__)
 
 try:
     from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
     _PYCAW_AVAILABLE = True
 except ImportError:
     _PYCAW_AVAILABLE = False
+    log.warning('pycaw not available — volume control disabled')
 
 
 class VolumeManager:
@@ -23,7 +27,8 @@ class VolumeManager:
             try:
                 self._cache = AudioUtilities.GetAllSessions()
                 self._cache_ts = now
-            except Exception:
+            except Exception as e:
+                log.warning(f'Failed to enumerate audio sessions: {e}')
                 self._cache = []
         return self._cache
 
@@ -38,8 +43,8 @@ class VolumeManager:
                     new_vol = min(1.0, current + self._STEP) if increase else max(0.0, current - self._STEP)
                     vol.SetMasterVolume(new_vol, None)
                     return round(new_vol * 100)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f'adjust_volume failed for {app_name}: {e}')
         # Cache miss — force refresh and retry once
         for session in self._sessions(force=True):
             if session.Process and session.Process.name() == app_name:
@@ -49,22 +54,9 @@ class VolumeManager:
                     new_vol = min(1.0, current + self._STEP) if increase else max(0.0, current - self._STEP)
                     vol.SetMasterVolume(new_vol, None)
                     return round(new_vol * 100)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f'adjust_volume retry failed for {app_name}: {e}')
         return None
-
-    def get_mute(self, app_name):
-        if not app_name:
-            return False
-        for sessions in (self._sessions(), self._sessions(force=True)):
-            for session in sessions:
-                if session.Process and session.Process.name() == app_name:
-                    try:
-                        return bool(session.SimpleAudioVolume.GetMute())
-                    except Exception:
-                        pass
-            break
-        return False
 
     def get_volume(self, app_name):
         """Return current volume 0-100 without changing it, or None if not found."""
@@ -75,10 +67,23 @@ class VolumeManager:
                 if session.Process and session.Process.name() == app_name:
                     try:
                         return round(session.SimpleAudioVolume.GetMasterVolume() * 100)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        log.debug(f'get_volume failed for {app_name}: {e}')
             break
         return None
+
+    def get_mute(self, app_name):
+        if not app_name:
+            return False
+        for sessions in (self._sessions(), self._sessions(force=True)):
+            for session in sessions:
+                if session.Process and session.Process.name() == app_name:
+                    try:
+                        return bool(session.SimpleAudioVolume.GetMute())
+                    except Exception as e:
+                        log.debug(f'get_mute failed for {app_name}: {e}')
+            break
+        return False
 
     def toggle_mute(self, app_name):
         """Toggle mute for a specific app. Returns new mute state or None on failure."""
@@ -92,9 +97,9 @@ class VolumeManager:
                         new_state = not vol.GetMute()
                         vol.SetMute(new_state, None)
                         return new_state
-                    except Exception:
-                        pass
-            break  # only retry on cache miss (second iteration handles it)
+                    except Exception as e:
+                        log.debug(f'toggle_mute failed for {app_name}: {e}')
+            break
         return None
 
     def get_available_processes(self):
@@ -103,6 +108,6 @@ class VolumeManager:
             if s.Process:
                 try:
                     names.append(s.Process.name())
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f'Could not read process name: {e}')
         return sorted(set(names))

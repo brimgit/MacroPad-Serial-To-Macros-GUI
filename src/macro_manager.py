@@ -1,84 +1,86 @@
 import json
-import os
 import logging
-import keyboard  # Import the keyboard library
-from utils import resource_path, get_data_path
+import keyboard
+from utils import get_data_path
 
-# Configuration for logging
-logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
-macros = {}  # Dictionary to store macro configurations
+macros = {}
+
 
 def set_macro(command, action_type, action):
-    """ Store the macro configuration in a dictionary """
-    macros[command] = {"type": action_type, "action": action}
-    logging.info(f"Macro set for {command}: {action_type} - {action}")
+    macros[command] = {'type': action_type, 'action': action}
+    log.info(f'Macro set: {command} → {action_type}: {action}')
+
 
 def save_macros():
-    """ Save the macros dictionary to a JSON file """
-    file_path = get_data_path('macros.json')  # Use get_data_path to ensure the correct writable directory
+    path = get_data_path('macros.json')
     try:
-        with open(file_path, 'w') as f:
-            json.dump(macros, f, indent=4)  # Use indent for better readability
-        logging.info("Macros saved successfully.")
+        with open(path, 'w') as f:
+            json.dump(macros, f, indent=4)
     except IOError as e:
-        logging.error(f"Failed to save macros: {e}")
-        raise IOError("Failed to save macros due to an I/O error.")
-    
+        log.error(f'Failed to save macros: {e}')
+        raise
+
+
 def reload_macros():
-    """ Load macros from a JSON file and update the macros dictionary """
-    file_path = get_data_path('macros.json')  # Use get_data_path to ensure the correct path
+    path = get_data_path('macros.json')
     try:
-        with open(file_path, 'r') as f:
-            loaded_macros = json.load(f)
-            macros.update(loaded_macros)
-            logging.info("Macros reloaded successfully.")
-            return loaded_macros
+        with open(path, 'r') as f:
+            loaded = json.load(f)
+        macros.update(loaded)
+        log.info(f'Loaded {len(loaded)} macros')
+        return loaded
     except FileNotFoundError:
-        logging.warning("Macros file not found, loading defaults.")
+        log.info('macros.json not found — starting empty')
         return {}
-    except json.JSONDecodeError:
-        logging.error("Error decoding JSON, loading defaults.")
-        raise Exception("Failed to decode macros; JSON file is corrupted.")
-    
+    except json.JSONDecodeError as e:
+        log.error(f'macros.json is corrupted: {e}')
+        return {}
+
+
 def delete_macro(command):
-    """ Delete a macro from the macros dictionary and save the changes """
-    if command in macros:
-        del macros[command]
-        save_macros()
-    else:
-        logging.warning(f"Attempted to delete a non-existent macro: {command}")
-        raise KeyError(f"No macro found for command '{command}'.")
+    if command not in macros:
+        raise KeyError(f'No macro for key {command!r}')
+    del macros[command]
+    save_macros()
+
 
 def execute_macro(command):
-    """ Execute the macro action based on the stored configuration """
     macro = macros.get(command)
-    if macro:
-        if macro["type"] == "Keyboard Key":
-            keyboard.send(macro["action"])  # keyboard.send combines press and release
-        elif macro["type"] == "Media Control":
-            keyboard.send(macro["action"])  # Use send for media controls too
-        elif macro["type"] == "Function Key":
-            keyboard.send(macro["action"])  # Function keys treated similarly
-        elif macro["type"] == "Modifier Key":
-            keyboard.press_and_release(macro["action"])
-        elif macro["type"] == "Type Text":
-            keyboard.write(macro["action"])
-        elif macro["type"] == "Recorded":
-            try:
-                events_data = json.loads(macro["action"])
-                events = [
-                    keyboard.KeyboardEvent(
-                        event_type=e['event_type'],
-                        scan_code=e.get('scan_code') or 0,
-                        name=e.get('name'),
-                        time=e.get('time', 0),
-                    )
-                    for e in events_data
-                ]
-                keyboard.play(events, speed_factor=1)
-            except Exception as e:
-                logging.error(f"Error executing recorded macro: {e}", exc_info=True)
-        logging.info(f"Executed {macro['type']} macro for {command}: {macro['action'][:40]}")
-    else:
-        logging.warning("No macro assigned for this command")
+    if not macro:
+        log.debug(f'No macro assigned to {command!r}')
+        return
+
+    mtype  = macro.get('type', '')
+    action = macro.get('action', '')
+
+    try:
+        if mtype in ('Keyboard Key', 'Media Control', 'Function Key'):
+            keyboard.send(action)
+        elif mtype == 'Modifier Key':
+            keyboard.press_and_release(action)
+        elif mtype == 'Type Text':
+            keyboard.write(action)
+        elif mtype == 'Recorded':
+            events_data = json.loads(action)
+            events = [
+                keyboard.KeyboardEvent(
+                    event_type=e['event_type'],
+                    scan_code=e.get('scan_code') or 0,
+                    name=e.get('name'),
+                    time=e.get('time', 0),
+                )
+                for e in events_data
+            ]
+            keyboard.play(events, speed_factor=1)
+        elif mtype == 'Mute App':
+            pass   # handled in api.py where encoder context is available
+        else:
+            log.warning(f'Unknown macro type {mtype!r} for key {command!r}')
+            return
+    except Exception as e:
+        log.error(f'Failed to execute {mtype} macro for {command!r}: {e}')
+        return
+
+    log.info(f'Executed [{mtype}] {command!r}: {str(action)[:40]}')

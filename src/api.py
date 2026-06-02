@@ -126,8 +126,8 @@ class MacroPadAPI:
             if self._serial_mgr:
                 try:
                     self._serial_mgr.stop()
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f'Error stopping previous serial manager: {e}')
                 self._serial_mgr = None
             from serial_manager import SerialManager
             self._serial_mgr = SerialManager(
@@ -178,8 +178,8 @@ class MacroPadAPI:
             if app and self._serial_mgr:
                 try:
                     muted = bool(self._serial_mgr.volume_manager.get_mute(app))
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f'Could not read mute state for {app}: {e}')
             self._enc_muted[enc_id] = muted
 
             if muted:
@@ -195,8 +195,8 @@ class MacroPadAPI:
                         vol = self._serial_mgr.volume_manager.get_volume(app)
                         if vol is not None:
                             pct = vol
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        log.debug(f'Could not read volume for {app}: {e}')
                 self._serial_send(f'{n}:{pct}')
             time.sleep(0.06)
             self._serial_send(_effect_cmd(enc_id, enc))
@@ -402,12 +402,13 @@ class MacroPadAPI:
         if self._serial_mgr:
             try:
                 return self._serial_mgr.volume_manager.get_available_processes()
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning(f'get_audio_apps via serial_mgr failed: {e}')
         try:
             from volume_manager import VolumeManager
             return VolumeManager().get_available_processes()
-        except Exception:
+        except Exception as e:
+            log.warning(f'get_audio_apps fallback failed: {e}')
             return []
 
     # ── Macro Recording ───────────────────────────────────────────────────────
@@ -544,7 +545,10 @@ class MacroPadAPI:
         try:
             with open(get_data_path('settings_serial.json'), 'r') as f:
                 return json.load(f)
-        except Exception:
+        except FileNotFoundError:
+            return {'port': 'COM6', 'baud_rate': '115200', 'brightness_pct': 10}
+        except Exception as e:
+            log.warning(f'Failed to load settings, using defaults: {e}')
             return {'port': 'COM6', 'baud_rate': '115200', 'brightness_pct': 10}
 
     def _save_settings_field(self, key, value):
