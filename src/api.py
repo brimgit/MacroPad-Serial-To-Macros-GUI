@@ -253,8 +253,8 @@ class MacroPadAPI:
                     self._push('encoder_turn', {'id': enc_id, 'direction': direction, 'app': app, 'pct': pct})
                 else:
                     self._push('encoder_turn', {'id': enc_id, 'direction': direction, 'app': app, 'pct': pct})
-            except (ValueError, IndexError):
-                pass
+            except Exception as e:
+                log.warning(f'Error processing encoder event: {e}')
             return
 
         # Key event
