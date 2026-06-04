@@ -96,11 +96,17 @@ class SerialManager:
             self.serial_port.reset_input_buffer()
             self.serial_port.write(_PING_CMD)
             self.serial_port.flush()
-            deadline = time.monotonic() + 4.0   # covers full startup sequence
+            deadline  = time.monotonic() + 10.0  # covers full startup + first-boot EEPROM reinit
+            last_ping = time.monotonic()
             while time.monotonic() < deadline and self.running:
                 line = self.serial_port.readline()
                 if line and line.decode('utf-8', errors='replace').strip() == _DEVICE_ID:
                     return True
+                # Re-ping every 2 s in case the first was swallowed during reset
+                if time.monotonic() - last_ping > 2.0:
+                    self.serial_port.write(_PING_CMD)
+                    self.serial_port.flush()
+                    last_ping = time.monotonic()
             return False
         except Exception:
             return False

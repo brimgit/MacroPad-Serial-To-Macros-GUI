@@ -28,8 +28,10 @@ struct StripData {
   Color   volumeColor;
   bool    useFade;
   bool    useVolume;
+  bool    usePointer;   // RGB passthrough: single moving dot indicator
   int     percentage;
   uint8_t blendStart;   // 0-90: LED position (%) where fade gradient begins
+  uint8_t pointerPos;   // 0-9: which LED is the indicator dot
 };
 
 StripData stripsData[4];
@@ -37,7 +39,7 @@ StripData stripsData[4];
 // ─── EEPROM ───────────────────────────────────────────────────────────────────
 #define EEPROM_SIZE          2000
 #define EEPROM_MAGIC_ADDR    0      // version byte — bump to force reinit on layout change
-#define EEPROM_MAGIC_VAL     0xB1
+#define EEPROM_MAGIC_VAL     0xB2
 #define EEPROM_DATA_START    4
 
 // ─── Encoders (0-indexed, matches Python E:0..E:3) ────────────────────────────
@@ -340,7 +342,15 @@ void handleLEDCommand(String &input) {
     return;
   }
 
-  if (input.indexOf("colorfade") != -1) {
+  if (input.indexOf("rgbpointer") != -1) {
+    int n, r, g, b, pos;
+    if (sscanf(input.c_str(), "%d:rgbpointer(%d,%d,%d,%d)", &n, &r, &g, &b, &pos) == 5) {
+      int idx = n - 1;
+      if (idx >= 0 && idx < 4)
+        changeStripColorPointer(idx, r, g, b, (uint8_t)constrain(pos, 0, NUMPIXELS - 1));
+    }
+
+  } else if (input.indexOf("colorfade") != -1) {
     int n, r1, g1, b1, r2, g2, b2, bs;
     // Format: N:colorfade(R1,G1,B1,R2,G2,B2,BLEND_START)
     if (sscanf(input.c_str(), "%d:colorfade(%d,%d,%d,%d,%d,%d,%d)",
@@ -380,8 +390,21 @@ void handleLEDCommand(String &input) {
 }
 
 // ─── LED rendering ────────────────────────────────────────────────────────────
+void lightUpPointer(int idx) {
+  encoderActivityTime[idx] = millis();
+  Color c = stripsData[idx].color;
+  for (int i = 0; i < NUMPIXELS; i++) {
+    if (i == (int)stripsData[idx].pointerPos)
+      strips[idx][i] = CRGB(255, 255, 255);  // white indicator dot
+    else
+      strips[idx][i] = CRGB(c.r, c.g, c.b);
+  }
+  FastLED.show();
+}
+
 void lightUpPercentage(int idx, int pct) {
-  encoderActivityTime[idx] = millis();  // reset timeout whenever a strip is lit
+  encoderActivityTime[idx] = millis();
+  if (stripsData[idx].usePointer) { lightUpPointer(idx); return; }  // reset timeout whenever a strip is lit
   int fullLeds          = pct / 10;
   int partialBrightness = (pct % 10) * (MAX_BRIGHTNESS / 10);
 
@@ -439,11 +462,12 @@ void lightUpPercentage(int idx, int pct) {
 }
 
 void changeStripColor(int idx, int r, int g, int b) {
-  stripsData[idx].color.r   = (uint8_t)r;
-  stripsData[idx].color.g   = (uint8_t)g;
-  stripsData[idx].color.b   = (uint8_t)b;
-  stripsData[idx].useFade   = false;
-  stripsData[idx].useVolume = false;
+  stripsData[idx].color.r    = (uint8_t)r;
+  stripsData[idx].color.g    = (uint8_t)g;
+  stripsData[idx].color.b    = (uint8_t)b;
+  stripsData[idx].useFade    = false;
+  stripsData[idx].useVolume  = false;
+  stripsData[idx].usePointer = false;
   lightUpPercentage(idx, stripsData[idx].percentage);
   saveColorsToEEPROM();
 }
@@ -459,6 +483,7 @@ void changeStripColorFade(int idx, int r1, int g1, int b1,
   stripsData[idx].blendStart  = blendStart;
   stripsData[idx].useFade     = true;
   stripsData[idx].useVolume   = false;
+  stripsData[idx].usePointer  = false;
   lightUpPercentage(idx, stripsData[idx].percentage);
   saveColorsToEEPROM();
 }
@@ -472,8 +497,20 @@ void changeStripColorVolume(int idx, int r, int g, int b) {
   stripsData[idx].volumeColor.b = (uint8_t)(255 - b);
   stripsData[idx].useFade       = false;
   stripsData[idx].useVolume     = true;
+  stripsData[idx].usePointer    = false;
   lightUpPercentage(idx, stripsData[idx].percentage);
   saveColorsToEEPROM();
+}
+
+void changeStripColorPointer(int idx, int r, int g, int b, uint8_t pos) {
+  stripsData[idx].color.r    = (uint8_t)r;
+  stripsData[idx].color.g    = (uint8_t)g;
+  stripsData[idx].color.b    = (uint8_t)b;
+  stripsData[idx].useFade    = false;
+  stripsData[idx].useVolume  = false;
+  stripsData[idx].usePointer = true;
+  stripsData[idx].pointerPos = pos;
+  lightUpPointer(idx);
 }
 
 // ─── EEPROM ───────────────────────────────────────────────────────────────────
@@ -490,8 +527,10 @@ void initDefaultStrips() {
     stripsData[i].volumeColor.b = (uint8_t)(255 - MAX_BRIGHTNESS);
     stripsData[i].useFade       = false;
     stripsData[i].useVolume     = false;
+    stripsData[i].usePointer    = false;
     stripsData[i].percentage    = 50;
     stripsData[i].blendStart    = 0;
+    stripsData[i].pointerPos    = 0;
   }
 }
 

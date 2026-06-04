@@ -1,4 +1,55 @@
 @import "tailwindcss";
 
+/* ── Reset ──────────────────────────────────────────────────────────────── */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', system-ui, sans-serif; }
+
+body {
+  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  background: #0d1117;
+}
+
+/* ── Monospace font (Cascadia Code ships with Windows 11, Consolas as fallback) */
+.mono {
+  font-family: 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'Fira Code', monospace;
+  font-feature-settings: "calt" 1;
+}
+
+/* ── Custom scrollbar ────────────────────────────────────────────────────── */
+::-webkit-scrollbar              { width: 5px; height: 5px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: #1e2a3a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover  { background: #283548; }
+::-webkit-scrollbar-corner       { background: transparent; }
+
+/* ── Page fade-in transition ─────────────────────────────────────────────── */
+@keyframes page-fade {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-fade {
+  animation: page-fade 0.15s ease-out;
+}
+
+/* ── Connection dot pulse ────────────────────────────────────────────────── */
+@keyframes dot-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  60%     { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
+}
+.dot-connected {
+  animation: dot-pulse 2.4s ease-in-out infinite;
+}
+
+/* ── Text selection ──────────────────────────────────────────────────────── */
+::selection { background: rgba(6, 182, 212, 0.25); color: inherit; }
+
+/* ── Toast notifications ─────────────────────────────────────────────────── */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(16px); }
+}
+.toast-enter { animation: toast-in  0.18s ease-out forwards; }
+.toast-exit  { animation: toast-out 0.25s ease-in  forwards; }

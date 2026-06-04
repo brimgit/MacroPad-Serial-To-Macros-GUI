@@ -31,8 +31,8 @@ function _evCount(json) {
 export function fieldStyle(t) {
   return { width:'100%', padding:'7px 10px', borderRadius:5, border:`1px solid ${t.border}`, background:t.elevated, color:t.text, fontSize:13, boxSizing:'border-box', outline:'none' }
 }
-export const solidBtn   = t => ({ padding:'7px 18px', borderRadius:6, border:'none', background:t.accent, color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' })
-export const outlineBtn = t => ({ padding:'7px 18px', borderRadius:6, border:`1px solid ${t.border}`, background:'transparent', color:t.muted, fontSize:13, cursor:'pointer' })
+export const solidBtn   = t => ({ padding:'8px 20px', borderRadius:7, border:'none', background:t.accent, color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', boxShadow:`0 0 12px rgba(6,182,212,0.25)`, transition:'opacity 0.1s' })
+export const outlineBtn = t => ({ padding:'8px 20px', borderRadius:7, border:`1px solid ${t.border}`, background:'transparent', color:t.muted, fontSize:13, cursor:'pointer', transition:'border-color 0.1s, color 0.1s' })
 
 // ── Recording UI ─────────────────────────────────────────────────────────────
 function RecordingInput({ t, api, value, onChange }) {

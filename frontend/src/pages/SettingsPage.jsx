@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../utils/toast'
 
 export default function SettingsPage({ t, settings, api, connected, port, onSave }) {
   const [ports,          setPorts]          = useState([])
@@ -13,6 +14,7 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
   const [checking,       setChecking]       = useState(false)
   // New state
   const [startupEnabled, setStartupEnabled] = useState(false)
+  const [signalRgb,      setSignalRgb]      = useState(settings.signalrgb_enabled ?? true)
   const [shiftKey,       setShiftKey]       = useState('')
   const [activeProfile,  setActiveProfile]  = useState('')
   const [triggerApps,    setTriggerApps]    = useState([])
@@ -70,9 +72,8 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
     const s = { ...settings, port: selPort, baud_rate: baud, brightness_pct: brightness, enc_led_timeout: ledTimeout, effect_speed_ms: effectSpeed }
     await api?.save_settings(s)
     onSave?.(s)
-    setStatus('Settings saved')
     setSaving(false)
-    setTimeout(() => setStatus(''), 2000)
+    toast('Settings saved', 'success')
   }
 
   const handleExport = async () => {
@@ -95,12 +96,10 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
       try {
         const data = JSON.parse(text)
         const r = await api?.import_profile?.(data)
-        if (r?.ok) setStatus(`Imported "${r.name}"`)
-        else setStatus('Import failed')
-        setTimeout(() => setStatus(''), 3000)
+        if (r?.ok) toast(`Imported "${r.name}"`, 'success')
+        else toast('Import failed', 'error')
       } catch {
-        setStatus('Invalid JSON file')
-        setTimeout(() => setStatus(''), 3000)
+        toast('Invalid JSON file', 'error')
       }
     }
     input.click()
@@ -125,6 +124,13 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
   const handleToggleStartup = async () => {
     const r = await api?.set_startup?.(!startupEnabled)
     if (r?.ok) setStartupEnabled(r.enabled)
+  }
+
+  const handleToggleSignalRgb = async () => {
+    const next = !signalRgb
+    setSignalRgb(next)
+    await api?.set_signalrgb_enabled?.(next)
+    toast(next ? 'SignalRGB enabled' : 'SignalRGB disabled', 'info')
   }
 
   const handleShiftKey = async (key) => {
@@ -241,7 +247,7 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
       {/* Startup with Windows */}
       <div style={section}>
         <div style={sectionTitle}>System</div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
           <div>
             <div style={{ fontSize:13, color:t.text, marginBottom:2 }}>Start with Windows</div>
             <div style={{ fontSize:12, color:t.muted }}>Launch MacroPad automatically on login</div>
@@ -249,6 +255,16 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
           <button onClick={handleToggleStartup}
             style={{ width:44, height:24, borderRadius:12, border:'none', background:startupEnabled?t.accent:t.border, cursor:'pointer', position:'relative', padding:0, flexShrink:0 }}>
             <div style={{ width:18, height:18, borderRadius:'50%', background:'#fff', position:'absolute', top:3, left:startupEnabled?23:3, transition:'left 0.15s' }} />
+          </button>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ fontSize:13, color:t.text, marginBottom:2 }}>SignalRGB Integration</div>
+            <div style={{ fontSize:12, color:t.muted }}>Allow SignalRGB to control encoder LEDs (port 7237)</div>
+          </div>
+          <button onClick={handleToggleSignalRgb}
+            style={{ width:44, height:24, borderRadius:12, border:'none', background:signalRgb?t.accent:t.border, cursor:'pointer', position:'relative', padding:0, flexShrink:0 }}>
+            <div style={{ width:18, height:18, borderRadius:'50%', background:'#fff', position:'absolute', top:3, left:signalRgb?23:3, transition:'left 0.15s' }} />
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { MacroModal, macroLabel } from '../components/MacroModal'
+import { toast } from '../utils/toast'
 
 const KEY_GRID = [['1','2','3','4'],['5','6','7','8']]
 const ALL_KEYS = KEY_GRID.flat()
@@ -12,7 +13,6 @@ export default function MacrosPage({ t, macros, api, onRefresh }) {
   const dragSrc = useRef(null)
 
   const handleSave = async (keyId, press, hold) => {
-    // Snapshot current state for undo before overwriting
     setUndoState({
       keyId,
       press: macros[`KP:${keyId}`]      ?? null,
@@ -24,6 +24,7 @@ export default function MacrosPage({ t, macros, api, onRefresh }) {
     if (hold)  await api?.set_macro(`KP:${keyId}:HOLD`, hold.type,  hold.action, hold.hold_ms ?? 500)
     else       await api?.delete_macro(`KP:${keyId}:HOLD`)
     onRefresh?.()
+    toast(`Key ${keyId} saved`, 'success')
   }
 
   const handleUndo = async () => {
@@ -117,7 +118,7 @@ export default function MacrosPage({ t, macros, api, onRefresh }) {
               onMouseEnter={e => { e.currentTarget.style.borderColor=t.accent; e.currentTarget.style.background=t.hover }}
               onMouseLeave={e => { if (dragOver !== keyId) { e.currentTarget.style.borderColor=t.border; e.currentTarget.style.background=t.card } }}
             >
-              <div style={{ fontSize:18, fontWeight:700, color:t.dim, marginBottom:6 }}>{keyId}</div>
+              <div className="mono" style={{ fontSize:18, fontWeight:700, color:t.dim, marginBottom:6 }}>{keyId}</div>
 
               {/* Click area to edit */}
               <div onClick={() => setEditing(keyId)} style={{ cursor:'pointer' }}>

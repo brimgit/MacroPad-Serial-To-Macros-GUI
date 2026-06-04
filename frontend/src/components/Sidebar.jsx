@@ -53,6 +53,7 @@ export default function Sidebar({
 
       {/* Connection dot */}
       <div title={connected ? port : 'Disconnected'}
+        className={connected ? 'dot-connected' : ''}
         style={{ width:8, height:8, borderRadius:'50%', background:connected?t.success:t.danger, margin:'0 0 8px' }} />
 
       {/* Nav icons */}
@@ -93,8 +94,8 @@ export default function Sidebar({
         <div>
           <div style={{ fontSize:15, fontWeight:700, color:t.text, letterSpacing:'-0.3px' }}>MacroPad</div>
           <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
-            <div style={{ width:7, height:7, borderRadius:'50%', background:connected?t.success:t.danger, flexShrink:0 }} />
-            <span style={{ fontSize:11, color:t.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            <div className={connected ? 'dot-connected' : ''} style={{ width:7, height:7, borderRadius:'50%', background:connected?t.success:t.danger, flexShrink:0 }} />
+            <span className="mono" style={{ fontSize:11, color:t.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {connected ? port : 'Disconnected'}
             </span>
           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { MacroModal, macroLabel } from '../components/MacroModal'
+import { toast } from '../utils/toast'
 
 const LED_MODES = ['default', 'solid', 'fade']
 const EFFECTS   = ['Off', 'Breathe', 'Wave', 'Rainbow', 'Chase', 'Color Cycle', 'Sparkle']
@@ -214,6 +215,7 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
     if (hold)  await api?.set_macro(`KP:${btnKey}:HOLD`, hold.type,  hold.action, hold.hold_ms ?? 500)
     else       await api?.delete_macro(`KP:${btnKey}:HOLD`)
     onRefresh?.()
+    toast(`Encoder ${idx + 1} button saved`, 'success')
   }
 
   const fld = {
@@ -224,12 +226,17 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
   const rowSt = { marginBottom:12 }
   const lblSt = { fontSize:11, fontWeight:600, color:t.muted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5, display:'block' }
 
+  const [cr, cg, cb] = local.color || [6, 182, 212]
+  const glowAlpha    = dirty ? 0.22 : muted ? 0 : 0.10
+  const cardGlow     = `0 0 20px rgba(${cr},${cg},${cb},${glowAlpha}), 0 2px 8px rgba(0,0,0,0.3)`
+
   return (
     <div style={{
       background:t.card,
       border:`1px solid ${dirty?t.accent:muted?'#ef444466':t.border}`,
       borderRadius:10, padding:'16px 16px 14px',
-      transition:'border-color 0.2s',
+      boxShadow: cardGlow,
+      transition:'border-color 0.2s, box-shadow 0.3s',
     }}>
       <div style={{ fontSize:13, fontWeight:700, marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         Encoder {idx+1}
@@ -305,6 +312,22 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
         </select>
       </div>
 
+      {/* RGB Passthrough */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+        <div>
+          <div style={{ fontSize:12, color:t.text, marginBottom:2 }}>RGB Passthrough</div>
+          <div style={{ fontSize:11, color:t.muted }}>Let SignalRGB control this ring</div>
+        </div>
+        <button onClick={() => upd('rgb_passthrough', !local.rgb_passthrough)}
+          style={{ width:36, height:20, borderRadius:10, border:'none', flexShrink:0,
+                   background:local.rgb_passthrough ? t.accent : t.border, cursor:'pointer',
+                   position:'relative', padding:0 }}>
+          <div style={{ width:14, height:14, borderRadius:'50%', background:'#fff',
+                        position:'absolute', top:3,
+                        left:local.rgb_passthrough ? 19 : 3, transition:'left 0.15s' }} />
+        </button>
+      </div>
+
       {/* Encoder button macros */}
       <div style={{ borderTop:`1px solid ${t.border}`, marginTop:4, paddingTop:12, marginBottom:12 }}>
         <div style={{ fontSize:10, fontWeight:600, color:t.dim, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
@@ -338,7 +361,7 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
 }
 
 // ── page ──────────────────────────────────────────────────────────────────────
-const DEFAULT_ENC = {app:'',mode:'default',color:[6,182,212],color2:[255,100,0],blend_start:0,effect:'Off'}
+const DEFAULT_ENC = {app:'',mode:'default',color:[6,182,212],color2:[255,100,0],blend_start:0,effect:'Off',rgb_passthrough:false}
 
 export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, macros, api, onEncoderChange, onEncodersReset, onRefresh }) {
   const [audioApps, setAudioApps] = useState([])
@@ -356,11 +379,11 @@ export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, 
   const handleChange = useCallback(async (idx, config) => {
     const r = await api?.set_encoder(idx, config)
     if (r?.encoders) {
-      // API resolved a conflict — refresh all encoder states at once
       onEncodersReset?.(r.encoders)
     } else {
       onEncoderChange?.(idx, config)
     }
+    toast(`Encoder ${idx + 1} saved`, 'success')
   }, [api, onEncoderChange, onEncodersReset])
 
   return (
