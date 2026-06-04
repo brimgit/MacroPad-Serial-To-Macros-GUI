@@ -1,5 +1,8 @@
 import sys
 import os
+import logging
+
+logging.basicConfig(level=logging.WARNING, format='%(levelname)s %(name)s: %(message)s')
 
 # Add src to path so imports work
 sys.path.insert(0, os.path.dirname(__file__))

@@ -22,8 +22,10 @@ class VolumeManager:
     _STEP = 0.05  # 5% per encoder tick
 
     def __init__(self):
-        self._cache    = None
-        self._cache_ts = 0.0
+        self._cache      = None
+        self._cache_ts   = 0.0
+        self._master_vol = None   # cached IAudioEndpointVolume — created once, reused
+        self._mic_vol    = None
 
     # ── per-app (session) volume ───────────────────────────────────────────────
 
@@ -122,12 +124,16 @@ class VolumeManager:
     def _master_endpoint(self):
         if not _PYCAW_AVAILABLE:
             return None
+        if self._master_vol is not None:
+            return self._master_vol
         try:
             device    = AudioUtilities.GetSpeakers()
-            interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            return cast(interface, POINTER(IAudioEndpointVolume))
+            dev       = getattr(device, '_dev', device)
+            interface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            self._master_vol = cast(interface, POINTER(IAudioEndpointVolume))
+            return self._master_vol
         except Exception as e:
-            log.debug(f'Cannot get master endpoint: {e}')
+            log.warning(f'Cannot get master endpoint: {e}')
             return None
 
     def adjust_master_volume(self, increase=True):
@@ -140,7 +146,8 @@ class VolumeManager:
             vol.SetMasterVolumeLevelScalar(new_vol, None)
             return round(new_vol * 100)
         except Exception as e:
-            log.debug(f'adjust_master_volume failed: {e}')
+            log.warning(f'adjust_master_volume failed: {e}')
+            self._master_vol = None   # force recreate next call
             return None
 
     def get_master_volume(self):
@@ -180,11 +187,15 @@ class VolumeManager:
     def _mic_endpoint(self):
         if not _PYCAW_AVAILABLE:
             return None
+        if self._mic_vol is not None:
+            return self._mic_vol
         try:
-            # pycaw >= 0.4.3 exposes GetMicrophone()
+            # pycaw >= 0.4.3 exposes GetMicrophone(); >= 20230407 wraps result in AudioDevice
             device    = AudioUtilities.GetMicrophone()
-            interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            return cast(interface, POINTER(IAudioEndpointVolume))
+            dev       = getattr(device, '_dev', device)
+            interface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            self._mic_vol = cast(interface, POINTER(IAudioEndpointVolume))
+            return self._mic_vol
         except AttributeError:
             # Older pycaw — use COM directly
             return self._mic_endpoint_via_com()
@@ -227,6 +238,7 @@ class VolumeManager:
             return round(new_vol * 100)
         except Exception as e:
             log.debug(f'adjust_mic_volume failed: {e}')
+            self._mic_vol = None   # force recreate next call
             return None
 
     def get_mic_volume(self):
