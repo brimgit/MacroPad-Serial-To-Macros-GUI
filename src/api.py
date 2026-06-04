@@ -18,7 +18,7 @@ from utils import get_data_path
 log = logging.getLogger(__name__)
 
 _DEFAULT_ENCODER = {
-    'app': '', 'mode': 'default',
+    'app': '', 'app_shift': '', 'mode': 'default',
     'color': [6, 182, 212], 'color2': [255, 100, 0],
     'blend_start': 0, 'effect': 'Off',
 }
@@ -60,13 +60,34 @@ class MacroPadAPI:
         self._connect_lock        = threading.Lock()
         self._key_down_times      = {}
         self._enc_muted           = {0:False,1:False,2:False,3:False}
-        self._enc_muted_last_turn = {}   # enc_id → time.monotonic() of last muted turn
-        self._enc_muted_flashing  = {}   # enc_id → bool, whether flash thread is running
+        self._enc_muted_last_turn = {}
+        self._enc_muted_flashing  = {}
         self._recording_buf       = None
+        self._shift_active        = False   # encoder layer shift
+        self._shift_turned        = False   # encoder turned while shift held
+        self._fw                  = None    # ForegroundWatcher
 
     # ── window reference ──────────────────────────────────────────────────────
     def set_window(self, window):
         self._window = window
+        self._maximized = False
+
+    def minimize_window(self):
+        if self._window: self._window.minimize()
+        return {'ok': True}
+
+    def toggle_maximize_window(self):
+        if self._window:
+            if self._maximized:
+                self._window.restore()
+            else:
+                self._window.maximize()
+            self._maximized = not self._maximized
+        return {'ok': True, 'maximized': self._maximized}
+
+    def close_window(self):
+        if self._window: self._window.destroy()
+        return {'ok': True}
 
     def _push(self, event: str, payload):
         if self._window:
@@ -98,12 +119,18 @@ class MacroPadAPI:
         baud  = int(settings.get('baud_rate', 115200))
         threading.Thread(target=self._do_connect, args=(port, baud), daemon=True).start()
 
+        # Start foreground watcher for auto profile switching
+        from foreground_watcher import ForegroundWatcher
+        self._fw = ForegroundWatcher(self._on_foreground_change)
+        self._fw.start()
+
         return {
-            'macros':   macro_manager.macros,
-            'profiles': profile_manager.get_names(self._profile_data),
-            'active':   profile_manager.get_active_name(self._profile_data),
-            'settings': settings,
-            'encoders': active.get('encoders', self._default_encoders()),
+            'macros':      macro_manager.macros,
+            'profiles':    profile_manager.get_names(self._profile_data),
+            'active':      profile_manager.get_active_name(self._profile_data),
+            'settings':    settings,
+            'encoders':    active.get('encoders', self._default_encoders()),
+            'trigger_apps': profile_manager.get_active(self._profile_data).get('trigger_apps', []),
         }
 
     # ── Serial ────────────────────────────────────────────────────────────────
@@ -234,7 +261,12 @@ class MacroPadAPI:
                 active    = profile_manager.get_active(self._profile_data)
                 encoders  = active.get('encoders', [])
                 enc       = encoders[enc_id] if enc_id < len(encoders) else {}
-                app       = enc.get('app', '')
+                # Use shifted app if shift key is held and a shift app is configured
+                if self._shift_active and enc.get('app_shift'):
+                    app = enc['app_shift']
+                    self._shift_turned = True
+                else:
+                    app = enc.get('app', '')
                 pct       = -1
                 if self._enc_muted.get(enc_id, False):
                     # Record this turn's time; start the flash thread only if not already running
@@ -268,9 +300,18 @@ class MacroPadAPI:
         if parts[0] == 'KP' and len(parts) >= 3:
             key   = parts[1]
             event = parts[2]
+            shift_key = self._settings.get('shift_key', '')
             if event == 'DOWN':
                 self._key_down_times[key] = time.monotonic()
+                if shift_key and key == shift_key:
+                    self._shift_active  = True
+                    self._shift_turned  = False
             elif event == 'UP':
+                if shift_key and key == shift_key:
+                    self._shift_active = False
+                    if self._shift_turned:
+                        self._shift_turned = False
+                        return  # suppress macro fire — key was used as shift
                 # Use firmware-provided duration if present, else calculate from DOWN timestamp
                 if len(parts) >= 4:
                     try:
@@ -350,6 +391,32 @@ class MacroPadAPI:
         profile_manager.save(self._profile_data)
         return {'ok': True}
 
+    def duplicate_profile(self, name: str):
+        new_name = profile_manager.duplicate(self._profile_data, name)
+        if not new_name:
+            return {'ok': False, 'error': 'Profile not found'}
+        profile_manager.save(self._profile_data)
+        return {
+            'ok':    True,
+            'name':  new_name,
+            'names': profile_manager.get_names(self._profile_data),
+        }
+
+    def rename_profile(self, old_name: str, new_name: str):
+        new_name = new_name.strip()
+        if not new_name:
+            return {'ok': False, 'error': 'Name cannot be empty'}
+        if new_name in profile_manager.get_names(self._profile_data):
+            return {'ok': False, 'error': 'Name already exists'}
+        if not profile_manager.rename(self._profile_data, old_name, new_name):
+            return {'ok': False, 'error': 'Rename failed'}
+        profile_manager.save(self._profile_data)
+        return {
+            'ok':     True,
+            'names':  profile_manager.get_names(self._profile_data),
+            'active': profile_manager.get_active_name(self._profile_data),
+        }
+
     def export_profile(self, name: str):
         return profile_manager.export_profile(self._profile_data, name)
 
@@ -397,6 +464,77 @@ class MacroPadAPI:
         self._serial_send(_effect_cmd(idx, enc))
 
         return {'ok': True, 'encoders': [dict(e) for e in enc_list]}
+
+    # ── Trigger apps (auto profile switching) ────────────────────────────────
+    def get_trigger_apps(self, profile_name: str):
+        return self._profile_data.get('profiles', {}).get(profile_name, {}).get('trigger_apps', [])
+
+    def set_trigger_apps(self, profile_name: str, apps: list):
+        profile_manager.set_trigger_apps(self._profile_data, profile_name, list(apps))
+        profile_manager.save(self._profile_data)
+        return {'ok': True}
+
+    def _on_foreground_change(self, app_name: str):
+        found = profile_manager.find_profile_for_app(self._profile_data, app_name)
+        if not found:
+            return
+        current = profile_manager.get_active_name(self._profile_data)
+        if found == current:
+            return
+        log.info(f'Auto-switching to profile {found!r} (foreground: {app_name})')
+        profile_manager.switch(self._profile_data, found)
+        active = profile_manager.get_active(self._profile_data)
+        macro_manager.macros.clear()
+        macro_manager.macros.update(active.get('macros', {}))
+        self._push('profile_switch', {
+            'active':      found,
+            'macros':      dict(macro_manager.macros),
+            'encoders':    active.get('encoders', self._default_encoders()),
+            'trigger_apps': active.get('trigger_apps', []),
+        })
+        threading.Thread(target=self._send_initial_state, daemon=True).start()
+
+    # ── Startup with Windows ──────────────────────────────────────────────────
+    def get_startup(self):
+        import winreg
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r'Software\Microsoft\Windows\CurrentVersion\Run',
+                                 0, winreg.KEY_READ)
+            winreg.QueryValueEx(key, 'MacroPad')
+            winreg.CloseKey(key)
+            return {'ok': True, 'enabled': True}
+        except Exception:
+            return {'ok': True, 'enabled': False}
+
+    def set_startup(self, enabled: bool):
+        import winreg
+        import sys
+        key_path = r'Software\Microsoft\Windows\CurrentVersion\Run'
+        try:
+            reg = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            if enabled:
+                exe    = sys.executable.replace('python.exe', 'pythonw.exe')
+                script = os.path.normpath(os.path.join(os.path.dirname(__file__), 'main_webview.py'))
+                winreg.SetValueEx(reg, 'MacroPad', 0, winreg.REG_SZ, f'"{exe}" "{script}"')
+            else:
+                try:
+                    winreg.DeleteValue(reg, 'MacroPad')
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(reg)
+            return {'ok': True, 'enabled': enabled}
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+
+    # ── Encoder shift key ─────────────────────────────────────────────────────
+    def get_shift_key(self):
+        return self._settings.get('shift_key', '')
+
+    def set_shift_key(self, key: str):
+        self._settings['shift_key'] = key
+        self._save_settings_field('shift_key', key)
+        return {'ok': True}
 
     # ── Settings ──────────────────────────────────────────────────────────────
     def get_settings(self):

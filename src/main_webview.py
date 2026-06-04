@@ -27,7 +27,7 @@ def main():
         width     = 1100,
         height    = 720,
         min_size  = (900, 620),
-        frameless = False,
+        frameless = True,
     )
 
     api.set_window(window)

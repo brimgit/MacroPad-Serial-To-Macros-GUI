@@ -201,9 +201,11 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
   useEffect(() => { setLocal({...encoder}); setDirty(false) }, [encoder])
   const upd = (k,v) => { setLocal(p=>({...p,[k]:v})); setDirty(true) }
 
-  const btnKey  = BTN_KEYS[idx]
-  const pressM  = macros?.[`KP:${btnKey}`]
-  const holdM   = macros?.[`KP:${btnKey}:HOLD`]
+  const btnKey    = BTN_KEYS[idx]
+  const pressM    = macros?.[`KP:${btnKey}`]
+  const holdM     = macros?.[`KP:${btnKey}:HOLD`]
+  const SPECIAL   = ['__MASTER__', '__MIC__', '']
+  const appOffline = local.app && !SPECIAL.includes(local.app) && Array.isArray(audioApps) && !audioApps.includes(local.app)
 
   const saveBtnMacro = async (press, hold) => {
     setEditBtn(null)
@@ -231,7 +233,10 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
     }}>
       <div style={{ fontSize:13, fontWeight:700, marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         Encoder {idx+1}
-        {muted && <span style={{ fontSize:10, color:'#ef4444', fontWeight:600, letterSpacing:'0.05em' }}>MUTED</span>}
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          {appOffline && <span title={`${local.app} is not running`} style={{ fontSize:10, color:'#f59e0b', fontWeight:600 }}>● OFFLINE</span>}
+          {muted && <span style={{ fontSize:10, color:'#ef4444', fontWeight:600, letterSpacing:'0.05em' }}>MUTED</span>}
+        </div>
       </div>
 
       <LEDRing
@@ -258,6 +263,7 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
           </div>
         )}
       </div>
+
 
       {/* LED mode */}
       <div style={rowSt}>

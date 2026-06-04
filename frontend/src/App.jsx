@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Sidebar      from './components/Sidebar'
+import TitleBar     from './components/TitleBar'
 import MacrosPage   from './pages/MacrosPage'
 import EncodersPage from './pages/EncodersPage'
 import SettingsPage from './pages/SettingsPage'
@@ -87,13 +88,21 @@ export default function App() {
       const { id, muted } = e.detail
       setEncMuted(prev => { const n=[...prev]; n[id]=muted; return n })
     }
-    window.addEventListener('macropad:connection',   onConn)
-    window.addEventListener('macropad:encoder_turn', onTurn)
-    window.addEventListener('macropad:mute_change',  onMute)
+    const onProfileSwitch = (e) => {
+      const { active, macros: m, encoders: enc } = e.detail
+      if (active)  setActive(active)
+      if (m)       setMacros(m)
+      if (enc)     setEncoders(enc)
+    }
+    window.addEventListener('macropad:connection',    onConn)
+    window.addEventListener('macropad:encoder_turn',  onTurn)
+    window.addEventListener('macropad:mute_change',   onMute)
+    window.addEventListener('macropad:profile_switch', onProfileSwitch)
     return () => {
-      window.removeEventListener('macropad:connection',   onConn)
-      window.removeEventListener('macropad:encoder_turn', onTurn)
-      window.removeEventListener('macropad:mute_change',  onMute)
+      window.removeEventListener('macropad:connection',    onConn)
+      window.removeEventListener('macropad:encoder_turn',  onTurn)
+      window.removeEventListener('macropad:mute_change',   onMute)
+      window.removeEventListener('macropad:profile_switch', onProfileSwitch)
     }
   }, [])
 
@@ -126,11 +135,13 @@ export default function App() {
 
   return (
     <div style={{
-      display: 'flex', height: '100vh',
+      display: 'flex', flexDirection: 'column', height: '100vh',
       background: t.bg, color: t.text,
       fontFamily: "'Segoe UI',system-ui,sans-serif", fontSize: 13,
       overflow: 'hidden',
     }}>
+      <TitleBar t={t} />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <Sidebar
         t={t} page={page} setPage={setPage} dark={dark} setDark={setDark}
         connected={connected} port={port}
@@ -151,6 +162,14 @@ export default function App() {
           const p = await pyapi()?.get_profiles()
           if (p) { setProfiles(p.names); setActive(p.active) }
         }}
+        onRename={async (oldName, newName) => {
+          const r = await pyapi()?.rename_profile(oldName, newName)
+          if (r?.ok) { setProfiles(r.names); setActive(r.active) }
+        }}
+        onDuplicate={async (name) => {
+          const r = await pyapi()?.duplicate_profile(name)
+          if (r?.ok) { setProfiles(r.names) }
+        }}
       />
 
       <main style={{ flex: 1, overflowY: 'auto', padding: '32px 36px' }}>
@@ -160,6 +179,7 @@ export default function App() {
         {page === 'Upload'   && <UploadPage   t={t} api={pyapi()} />}
         {page === 'Test'     && <TestPage     t={t} />}
       </main>
+      </div>
     </div>
   )
 }

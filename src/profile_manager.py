@@ -106,6 +106,32 @@ def find_profile_for_app(data, app_name):
     return None
 
 
+def duplicate(data, name):
+    """Duplicate a profile, returning the new name."""
+    if name not in data['profiles']:
+        return None
+    import copy
+    base     = f'{name} (copy)'
+    new_name = base
+    counter  = 1
+    while new_name in data['profiles']:
+        new_name = f'{base} {counter}'
+        counter += 1
+    data['profiles'][new_name] = copy.deepcopy(data['profiles'][name])
+    return new_name
+
+
+def rename(data, old_name, new_name):
+    if old_name not in data['profiles'] or not new_name or new_name == old_name:
+        return False
+    if new_name in data['profiles']:
+        return False
+    data['profiles'][new_name] = data['profiles'].pop(old_name)
+    if data['active'] == old_name:
+        data['active'] = new_name
+    return True
+
+
 def export_profile(data, name):
     """Return a standalone dict for the named profile (for file export)."""
     return {'name': name, 'profile': data['profiles'].get(name, {})}
