@@ -72,7 +72,8 @@ class MacroPadAPI:
         if self._window:
             safe = json.dumps(payload).replace("'", "\\'")
             self._window.evaluate_js(
-                f"window.__macropadEvent && window.__macropadEvent('{event}', {safe})"
+                f"window.__macropadEvent && window.__macropadEvent('{event}', {safe})",
+                callback=lambda _: None,
             )
 
     def _default_encoders(self):
@@ -152,6 +153,12 @@ class MacroPadAPI:
 
     def _on_connection_changed(self, connected):
         self._connected = connected
+        if connected and self._serial_mgr:
+            actual = self._serial_mgr.port
+            if actual != self._port:
+                log.info(f'Auto-connected to {actual} (was configured for {self._port})')
+                self._port = actual
+                self._save_settings_field('port', actual)
         self._push('connection', {'connected': connected, 'port': self._port if connected else ''})
         if connected:
             # Delay slightly so the ESP32 finishes booting before we flood it

@@ -300,6 +300,11 @@ void handleKeypad() {
 //   N:color(R,G,B)         solid colour
 //   N:P                    set percentage 0-100
 void handleLEDCommand(String &input) {
+  if (input == "PING") {
+    Serial.println("MACROPAD_OK");
+    return;
+  }
+
   if (input.startsWith("BRIGHT:")) {
     int val = constrain(input.substring(7).toInt(), 0, 255);
     FastLED.setBrightness(val);
