@@ -281,6 +281,14 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
         style={{ padding:'9px 24px', borderRadius:7, border:'none', background:t.accent, color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>
         {saving ? 'Saving…' : 'Save Settings'}
       </button>
+
+      <div style={{ marginTop:40, textAlign:'center' }}>
+        <button onClick={() => window.open?.('https://www.youtube.com/watch?v=dQw4w9WgXcQ')}
+          style={{ background:'none', border:'none', color:t.border, fontSize:10,
+                   cursor:'pointer', letterSpacing:'0.05em' }}>
+          credits
+        </button>
+      </div>
     </div>
   )
 }
