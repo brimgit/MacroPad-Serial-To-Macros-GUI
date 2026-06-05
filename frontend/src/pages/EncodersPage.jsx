@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { MacroModal, macroLabel } from '../components/MacroModal'
 import { toast } from '../utils/toast'
 
@@ -194,12 +194,17 @@ function BtnMacroRow({ t, label, macro, onClick }) {
 }
 
 // ── encoder card ──────────────────────────────────────────────────────────────
-function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flashMuted, macros, api, onRefresh, onChange }) {
+const EncoderCard = forwardRef(function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flashMuted, macros, api, onRefresh, onChange, onDirtyChange }, ref) {
   const [local,   setLocal]   = useState({...encoder})
   const [dirty,   setDirty]   = useState(false)
   const [editBtn, setEditBtn] = useState(null)  // 'press' | 'hold' | null
 
   useEffect(() => { setLocal({...encoder}); setDirty(false) }, [encoder])
+  useEffect(() => { onDirtyChange?.(idx, dirty) }, [dirty]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useImperativeHandle(ref, () => ({
+    apply() { if (dirty) { onChange(idx, local); setDirty(false) } },
+  }), [dirty, local, idx, onChange])
   const upd = (k,v) => { setLocal(p=>({...p,[k]:v})); setDirty(true) }
 
   const btnKey    = BTN_KEYS[idx]
@@ -312,22 +317,6 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
         </select>
       </div>
 
-      {/* RGB Passthrough */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-        <div>
-          <div style={{ fontSize:12, color:t.text, marginBottom:2 }}>RGB Passthrough</div>
-          <div style={{ fontSize:11, color:t.muted }}>Let SignalRGB control this ring</div>
-        </div>
-        <button onClick={() => upd('rgb_passthrough', !local.rgb_passthrough)}
-          style={{ width:36, height:20, borderRadius:10, border:'none', flexShrink:0,
-                   background:local.rgb_passthrough ? t.accent : t.border, cursor:'pointer',
-                   position:'relative', padding:0 }}>
-          <div style={{ width:14, height:14, borderRadius:'50%', background:'#fff',
-                        position:'absolute', top:3,
-                        left:local.rgb_passthrough ? 19 : 3, transition:'left 0.15s' }} />
-        </button>
-      </div>
-
       {/* Encoder button macros */}
       <div style={{ borderTop:`1px solid ${t.border}`, marginTop:4, paddingTop:12, marginBottom:12 }}>
         <div style={{ fontSize:10, fontWeight:600, color:t.dim, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
@@ -358,13 +347,15 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
       )}
     </div>
   )
-}
+})
 
 // ── page ──────────────────────────────────────────────────────────────────────
-const DEFAULT_ENC = {app:'',mode:'default',color:[6,182,212],color2:[255,100,0],blend_start:0,effect:'Off',rgb_passthrough:false}
+const DEFAULT_ENC = {app:'',mode:'default',color:[6,182,212],color2:[255,100,0],blend_start:0,effect:'Off'}
 
 export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, macros, api, onEncoderChange, onEncodersReset, onRefresh }) {
   const [audioApps, setAudioApps] = useState([])
+  const [dirtySet,  setDirtySet]  = useState(() => new Set())
+  const cardRefs = useRef([{current:null},{current:null},{current:null},{current:null}])
 
   useEffect(() => {
     api?.get_audio_apps().then(apps => {
@@ -386,16 +377,43 @@ export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, 
     toast(`Encoder ${idx + 1} saved`, 'success')
   }, [api, onEncoderChange, onEncodersReset])
 
+  const handleDirtyChange = useCallback((idx, isDirty) => {
+    setDirtySet(prev => {
+      const next = new Set(prev)
+      isDirty ? next.add(idx) : next.delete(idx)
+      return next
+    })
+  }, [])
+
+  const handleApplyAll = useCallback(() => {
+    cardRefs.current.forEach(r => r.current?.apply())
+  }, [])
+
+  const anyDirty = dirtySet.size > 0
+
   return (
     <div>
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:20, fontWeight:700, marginBottom:4 }}>Encoders</h1>
-        <p style={{ fontSize:13, color:t.muted }}>Configure LED, volume app, and button macros per encoder.</p>
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:24 }}>
+        <div>
+          <h1 style={{ fontSize:20, fontWeight:700, marginBottom:4 }}>Encoders</h1>
+          <p style={{ fontSize:13, color:t.muted }}>Configure LED, volume app, and button macros per encoder.</p>
+        </div>
+        <button onClick={handleApplyAll} disabled={!anyDirty}
+          style={{
+            padding:'7px 16px', borderRadius:6, border:'none', flexShrink:0,
+            background: anyDirty ? t.accent : t.border,
+            color: anyDirty ? '#fff' : t.dim,
+            fontSize:12, fontWeight:600,
+            cursor: anyDirty ? 'pointer' : 'not-allowed',
+            transition:'background 0.15s',
+          }}>
+          Apply All Changes{anyDirty ? ` (${dirtySet.size})` : ''}
+        </button>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16, maxWidth:680 }}>
         {Array.from({length:4},(_,i)=>(
           <EncoderCard
-            key={i} t={t} idx={i}
+            key={i} ref={cardRefs.current[i]} t={t} idx={i}
             encoder={encoders?.[i]??DEFAULT_ENC}
             audioApps={audioApps}
             usedApps={usedApps}
@@ -406,6 +424,7 @@ export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, 
             api={api}
             onRefresh={onRefresh}
             onChange={handleChange}
+            onDirtyChange={handleDirtyChange}
           />
         ))}
       </div>

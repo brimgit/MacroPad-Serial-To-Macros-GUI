@@ -21,7 +21,6 @@ _DEFAULT_ENCODER = {
     'app': '', 'app_shift': '', 'mode': 'default',
     'color': [6, 182, 212], 'color2': [255, 100, 0],
     'blend_start': 0, 'effect': 'Off',
-    'rgb_passthrough': False,
 }
 
 _EFFECT_MAP = {
@@ -67,9 +66,6 @@ class MacroPadAPI:
         self._shift_active        = False   # encoder layer shift
         self._shift_turned        = False   # encoder turned while shift held
         self._fw                  = None    # ForegroundWatcher
-        self._rgb_last_update     = None    # monotonic time of last SignalRGB push
-        self._rgb_active_encs     = set()   # enc IDs currently in RGB override mode
-        self._rgb_last_colors     = {}      # enc_id -> (r,g,b) last sent to hardware
 
     # ── window reference ──────────────────────────────────────────────────────
     def set_window(self, window):
@@ -127,11 +123,6 @@ class MacroPadAPI:
         from foreground_watcher import ForegroundWatcher
         self._fw = ForegroundWatcher(self._on_foreground_change)
         self._fw.start()
-
-        # Start RGB server and watchdog for SignalRGB passthrough
-        import rgb_server
-        rgb_server.start(self._on_rgb_update)
-        threading.Thread(target=self._rgb_watchdog, daemon=True).start()
 
         return {
             'macros':      macro_manager.macros,
@@ -202,8 +193,6 @@ class MacroPadAPI:
 
     def _send_initial_state(self):
         """Send brightness, LED colors, effects, and volume levels on connect."""
-        self._rgb_active_encs.clear()
-        self._rgb_last_colors.clear()
         time.sleep(2.5)
         s = self._load_settings()
         brightness_pct = s.get('brightness_pct', 10)
@@ -213,8 +202,7 @@ class MacroPadAPI:
         encoders = active.get('encoders', self._default_encoders())
 
         enc_timeout = s.get('enc_led_timeout', 2)
-        has_passthrough = any(enc.get('rgb_passthrough', False) for enc in encoders)
-        self._serial_send(f'ENC_TIMEOUT:{3600 if has_passthrough else enc_timeout}')
+        self._serial_send(f'ENC_TIMEOUT:{enc_timeout}')
         time.sleep(0.05)
         effect_speed = s.get('effect_speed_ms', 10)
         self._serial_send(f'EFFECT_SPEED:{effect_speed}')
@@ -242,10 +230,7 @@ class MacroPadAPI:
             else:
                 self._serial_send(_color_cmd(enc_id, enc))
                 time.sleep(0.06)
-                if enc.get('rgb_passthrough', False):
-                    # Passthrough: lock all 10 LEDs on; SignalRGB controls colour
-                    self._serial_send(f'{n}:100')
-                elif vm and app:
+                if vm and app:
                     pct = 0
                     try:
                         if app == MASTER_APP:
@@ -303,16 +288,7 @@ class MacroPadAPI:
                         val = vm.adjust_volume(app, increase=increase)
                     if val is not None:
                         pct = val
-                        active2  = profile_manager.get_active(self._profile_data)
-                        enc_data = (active2.get('encoders') or [])[enc_id] if enc_id < len(active2.get('encoders') or []) else {}
-                        if enc_data.get('rgb_passthrough', False) and enc_id in self._rgb_active_encs:
-                            # Moving dot indicator: 1 white LED at volume position, rest = SignalRGB color
-                            sr, sg, sb = self._rgb_last_colors.get(enc_id, (6, 182, 212))
-                            pos = min(9, int(round(pct * 9 / 100)))
-                            self._serial_send(f'{enc_id + 1}:rgbpointer({sr},{sg},{sb},{pos})')
-                            self._rgb_last_colors.pop(enc_id, None)  # next SignalRGB update restores solid
-                        else:
-                            self._serial_send(f'{enc_id + 1}:{pct}')
+                        self._serial_send(f'{enc_id + 1}:{pct}')
                     self._push('encoder_turn', {'id': enc_id, 'direction': direction, 'app': app, 'pct': pct})
                 else:
                     self._push('encoder_turn', {'id': enc_id, 'direction': direction, 'app': app, 'pct': pct})
@@ -484,15 +460,8 @@ class MacroPadAPI:
 
         # Push updated color/effect to device
         enc = enc_list[idx]
-        self._serial_send(_color_cmd(idx, enc))
+        self._restore_encoder_led(idx)
         self._serial_send(_effect_cmd(idx, enc))
-        # If passthrough was just turned off, stop treating this encoder as overridden
-        if not enc.get('rgb_passthrough', False):
-            self._rgb_active_encs.discard(idx)
-            if not self._rgb_active_encs:
-                # Last passthrough encoder removed — restore LED timeout
-                self._serial_send(f'ENC_TIMEOUT:{self._settings.get("enc_led_timeout", 2)}')
-        self._rgb_last_colors.pop(idx, None)
 
         return {'ok': True, 'encoders': [dict(e) for e in enc_list]}
 
@@ -755,97 +724,19 @@ class MacroPadAPI:
             if not still_muted():
                 self._restore_encoder_led(enc_id)
 
-    # ── SignalRGB passthrough ─────────────────────────────────────────────────
-    def set_signalrgb_enabled(self, enabled: bool):
-        self._save_settings_field('signalrgb_enabled', bool(enabled))
-        self._settings['signalrgb_enabled'] = bool(enabled)
-        if not enabled:
-            # Immediately restore any overridden encoders
-            try:
-                active   = profile_manager.get_active(self._profile_data)
-                encoders = active.get('encoders', self._default_encoders())
-                for enc_id in list(self._rgb_active_encs):
-                    self._restore_encoder_led(enc_id)
-                    if enc_id < len(encoders):
-                        self._serial_send(_effect_cmd(enc_id, encoders[enc_id]))
-                self._rgb_active_encs.clear()
-                self._rgb_last_colors.clear()
-                self._rgb_last_update = None
-                self._serial_send(f'ENC_TIMEOUT:{self._settings.get("enc_led_timeout", 2)}')
-            except Exception as e:
-                log.debug(f'set_signalrgb_enabled restore error: {e}')
-        return {'ok': True, 'enabled': bool(enabled)}
-
-    def _on_rgb_update(self, leds: list):
-        """
-        Called by the RGB HTTP server on every SignalRGB Render() tick.
-        leds — list of 40 [r, g, b] values: 10 LEDs × 4 encoders, row-major.
-        """
-        if not self._settings.get('signalrgb_enabled', True):
-            return
-        self._rgb_last_update = time.monotonic()
-        active   = profile_manager.get_active(self._profile_data)
-        encoders = active.get('encoders', self._default_encoders())
-
-        cmds = []   # collect all serial commands and send in one batch write
-        for enc_id, enc in enumerate(encoders):
-            if not enc.get('rgb_passthrough', False):
-                continue
-            if self._enc_muted.get(enc_id, False):
-                continue
-            start_i  = enc_id * 10
-            enc_leds = leds[start_i:start_i + 10]
-            if not enc_leds:
-                continue
-            r = sum(c[0] for c in enc_leds) // len(enc_leds)
-            g = sum(c[1] for c in enc_leds) // len(enc_leds)
-            b = sum(c[2] for c in enc_leds) // len(enc_leds)
-            n = enc_id + 1
-            first = enc_id not in self._rgb_active_encs
-            if first:
-                if not self._rgb_active_encs:
-                    cmds.append('ENC_TIMEOUT:3600')
-                self._rgb_active_encs.add(enc_id)
-                self._rgb_last_colors.pop(enc_id, None)
-            if self._rgb_last_colors.get(enc_id) != (r, g, b):
-                self._rgb_last_colors[enc_id] = (r, g, b)
-                cmds.append(f'{n}:color({r},{g},{b})')
-                cmds.append(f'{n}:100')  # always ensure all 10 LEDs on
-
-        if cmds and self._serial_mgr:
-            self._serial_mgr.send_data('\n'.join(cmds) + '\n')
-
-    def _rgb_watchdog(self):
-        """Restore encoder LEDs when SignalRGB stops sending updates (> 5 s gap)."""
-        while True:
-            time.sleep(2)
-            if not self._rgb_last_update:
-                continue
-            if time.monotonic() - self._rgb_last_update <= 5.0:
-                continue
-            try:
-                active   = profile_manager.get_active(self._profile_data)
-                encoders = active.get('encoders', self._default_encoders())
-                for enc_id in list(self._rgb_active_encs):
-                    self._restore_encoder_led(enc_id)
-                    if enc_id < len(encoders):
-                        self._serial_send(_effect_cmd(enc_id, encoders[enc_id]))
-                self._rgb_active_encs.clear()
-                self._rgb_last_colors.clear()
-                self._rgb_last_update = None
-                self._serial_send(f'ENC_TIMEOUT:{self._settings.get("enc_led_timeout", 2)}')
-                log.info('SignalRGB disconnected — encoder LEDs restored')
-            except Exception as e:
-                log.debug(f'RGB watchdog error: {e}')
-
     def _restore_encoder_led(self, enc_id: int):
-        """Re-send the configured color + current volume for an encoder."""
+        """Re-send the configured color + current volume (or mute red) for an encoder."""
         try:
             active   = profile_manager.get_active(self._profile_data)
             encoders = active.get('encoders', [])
             if enc_id >= len(encoders):
                 return
             enc = encoders[enc_id]
+            n   = enc_id + 1
+            if self._enc_muted.get(enc_id, False):
+                self._serial_send(f'{n}:color(200,0,0)')
+                self._serial_send(f'{n}:100')
+                return
             self._serial_send(_color_cmd(enc_id, enc))
             app = enc.get('app', '')
             if app and self._serial_mgr:
@@ -857,7 +748,7 @@ class MacroPadAPI:
                     vol = vm.get_mic_volume() or 0
                 else:
                     vol = vm.get_volume(app) or 0
-                self._serial_send(f'{enc_id + 1}:{vol}')
+                self._serial_send(f'{n}:{vol}')
         except Exception as e:
             log.debug(f'_restore_encoder_led failed for enc {enc_id}: {e}')
 
@@ -894,7 +785,11 @@ class MacroPadAPI:
         }
 
     def _local_version(self) -> str:
-        path = os.path.join(os.path.dirname(__file__), '..', 'version.txt')
+        import sys
+        if getattr(sys, 'frozen', False):
+            path = os.path.join(sys._MEIPASS, 'version.txt')
+        else:
+            path = os.path.join(os.path.dirname(__file__), '..', 'version.txt')
         with open(os.path.normpath(path), 'r') as f:
             return f.read().strip()
 
@@ -918,10 +813,10 @@ class MacroPadAPI:
             with open(get_data_path('settings_serial.json'), 'r') as f:
                 return json.load(f)
         except FileNotFoundError:
-            return {'port': 'COM6', 'baud_rate': '115200', 'brightness_pct': 10, 'signalrgb_enabled': True}
+            return {'port': 'COM6', 'baud_rate': '115200', 'brightness_pct': 10}
         except Exception as e:
             log.warning(f'Failed to load settings, using defaults: {e}')
-            return {'port': 'COM6', 'baud_rate': '115200', 'brightness_pct': 10, 'signalrgb_enabled': True}
+            return {'port': 'COM6', 'baud_rate': '115200', 'brightness_pct': 10}
 
     def _save_settings_field(self, key, value):
         s = self._load_settings()

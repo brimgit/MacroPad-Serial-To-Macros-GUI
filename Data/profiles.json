@@ -21,12 +21,17 @@
         },
         "KP:1:HOLD": {
           "type": "Recorded",
-          "action": "[{\"event_type\": \"down\", \"scan_code\": 48, \"name\": \"b\", \"time\": 0.0}, {\"event_type\": \"up\", \"scan_code\": 48, \"name\": \"b\", \"time\": 0.076}, {\"event_type\": \"down\", \"scan_code\": 19, \"name\": \"r\", \"time\": 0.092}, {\"event_type\": \"up\", \"scan_code\": 19, \"name\": \"r\", \"time\": 0.15}, {\"event_type\": \"down\", \"scan_code\": 23, \"name\": \"i\", \"time\": 0.175}, {\"event_type\": \"down\", \"scan_code\": 30, \"name\": \"a\", \"time\": 0.268}, {\"event_type\": \"up\", \"scan_code\": 23, \"name\": \"i\", \"time\": 0.293}, {\"event_type\": \"up\", \"scan_code\": 30, \"name\": \"a\", \"time\": 0.36}, {\"event_type\": \"down\", \"scan_code\": 49, \"name\": \"n\", \"time\": 0.41}, {\"event_type\": \"up\", \"scan_code\": 49, \"name\": \"n\", \"time\": 0.494}, {\"event_type\": \"down\", \"scan_code\": 28, \"name\": \"enter\", \"time\": 0.947}, {\"event_type\": \"up\", \"scan_code\": 28, \"name\": \"enter\", \"time\": 0.997}]"
+          "action": "[{\"event_type\": \"down\", \"scan_code\": 48, \"name\": \"b\", \"time\": 0.0}, {\"event_type\": \"up\", \"scan_code\": 48, \"name\": \"b\", \"time\": 0.076}, {\"event_type\": \"down\", \"scan_code\": 19, \"name\": \"r\", \"time\": 0.092}, {\"event_type\": \"up\", \"scan_code\": 19, \"name\": \"r\", \"time\": 0.15}, {\"event_type\": \"down\", \"scan_code\": 23, \"name\": \"i\", \"time\": 0.175}, {\"event_type\": \"down\", \"scan_code\": 30, \"name\": \"a\", \"time\": 0.268}, {\"event_type\": \"up\", \"scan_code\": 23, \"name\": \"i\", \"time\": 0.293}, {\"event_type\": \"up\", \"scan_code\": 30, \"name\": \"a\", \"time\": 0.36}, {\"event_type\": \"down\", \"scan_code\": 49, \"name\": \"n\", \"time\": 0.41}, {\"event_type\": \"up\", \"scan_code\": 49, \"name\": \"n\", \"time\": 0.494}, {\"event_type\": \"down\", \"scan_code\": 28, \"name\": \"enter\", \"time\": 0.947}, {\"event_type\": \"up\", \"scan_code\": 28, \"name\": \"enter\", \"time\": 0.997}]",
+          "hold_ms": 500
+        },
+        "KP:B": {
+          "type": "Mute App",
+          "action": ""
         }
       },
       "encoders": [
         {
-          "app": "steam.exe",
+          "app": "__MASTER__",
           "mode": "default",
           "color": [
             0,
@@ -39,10 +44,11 @@
             0
           ],
           "blend_start": 0,
-          "effect": "Off"
+          "effect": "Off",
+          "app_shift": "DayZ_x64.exe"
         },
         {
-          "app": "",
+          "app": "DayZ_x64.exe",
           "mode": "default",
           "color": [
             30,
@@ -74,7 +80,7 @@
           "effect": "Off"
         },
         {
-          "app": "",
+          "app": "explorer.exe",
           "mode": "default",
           "color": [
             6,

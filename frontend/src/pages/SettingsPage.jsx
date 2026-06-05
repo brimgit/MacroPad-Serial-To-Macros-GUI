@@ -14,7 +14,6 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
   const [checking,       setChecking]       = useState(false)
   // New state
   const [startupEnabled, setStartupEnabled] = useState(false)
-  const [signalRgb,      setSignalRgb]      = useState(settings.signalrgb_enabled ?? true)
   const [shiftKey,       setShiftKey]       = useState('')
   const [activeProfile,  setActiveProfile]  = useState('')
   const [triggerApps,    setTriggerApps]    = useState([])
@@ -124,13 +123,6 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
   const handleToggleStartup = async () => {
     const r = await api?.set_startup?.(!startupEnabled)
     if (r?.ok) setStartupEnabled(r.enabled)
-  }
-
-  const handleToggleSignalRgb = async () => {
-    const next = !signalRgb
-    setSignalRgb(next)
-    await api?.set_signalrgb_enabled?.(next)
-    toast(next ? 'SignalRGB enabled' : 'SignalRGB disabled', 'info')
   }
 
   const handleShiftKey = async (key) => {
@@ -255,16 +247,6 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
           <button onClick={handleToggleStartup}
             style={{ width:44, height:24, borderRadius:12, border:'none', background:startupEnabled?t.accent:t.border, cursor:'pointer', position:'relative', padding:0, flexShrink:0 }}>
             <div style={{ width:18, height:18, borderRadius:'50%', background:'#fff', position:'absolute', top:3, left:startupEnabled?23:3, transition:'left 0.15s' }} />
-          </button>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <div>
-            <div style={{ fontSize:13, color:t.text, marginBottom:2 }}>SignalRGB Integration</div>
-            <div style={{ fontSize:12, color:t.muted }}>Allow SignalRGB to control encoder LEDs (port 7237)</div>
-          </div>
-          <button onClick={handleToggleSignalRgb}
-            style={{ width:44, height:24, borderRadius:12, border:'none', background:signalRgb?t.accent:t.border, cursor:'pointer', position:'relative', padding:0, flexShrink:0 }}>
-            <div style={{ width:18, height:18, borderRadius:'50%', background:'#fff', position:'absolute', top:3, left:signalRgb?23:3, transition:'left 0.15s' }} />
           </button>
         </div>
       </div>
