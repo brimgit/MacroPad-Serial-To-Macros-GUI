@@ -12,6 +12,7 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
   const [status,         setStatus]         = useState('')
   const [updateInfo,     setUpdateInfo]     = useState(null)
   const [checking,       setChecking]       = useState(false)
+  const [updateProgress, setUpdateProgress] = useState(null) // null | {state,pct?,error?}
   // New state
   const [startupEnabled, setStartupEnabled] = useState(false)
   const [shiftKey,       setShiftKey]       = useState('')
@@ -125,6 +126,17 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
     if (r?.ok) setStartupEnabled(r.enabled)
   }
 
+  useEffect(() => {
+    const onProgress = (e) => setUpdateProgress(e.detail)
+    window.addEventListener('macropad:update_progress', onProgress)
+    return () => window.removeEventListener('macropad:update_progress', onProgress)
+  }, [])
+
+  const handleUpdateNow = () => {
+    setUpdateProgress({ state: 'downloading', pct: 0 })
+    api?.install_update?.(updateInfo.latest)
+  }
+
   const handleShiftKey = async (key) => {
     setShiftKey(key)
     await api?.set_shift_key?.(key)
@@ -184,6 +196,7 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
             <option value={2}>2 seconds</option>
             <option value={5}>5 seconds</option>
             <option value={10}>10 seconds</option>
+            <option value={86400}>Always on</option>
           </select>
         </div>
         <div style={row}>
@@ -217,21 +230,34 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
             {checking ? 'Checking…' : '↻ Check for Updates'}
           </button>
           {updateInfo?.update_available && (
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:13, color:t.warning, fontWeight:600 }}>⚠ Update available — v{updateInfo.latest}</span>
+            <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginTop:4 }}>
+              <span style={{ fontSize:13, color:t.warning, fontWeight:600 }}>
+                Update available — v{updateInfo.latest}
+              </span>
               <span style={{ fontSize:12, color:t.muted }}>(current: v{updateInfo.current})</span>
-              <a href={updateInfo.repo_url} target="_blank" rel="noreferrer"
-                style={{ fontSize:12, color:t.accent, textDecoration:'none' }}
-                onClick={e => { e.preventDefault(); window.open?.(updateInfo.repo_url) }}>
-                View on GitHub ↗
-              </a>
+              {!updateProgress || updateProgress.state === 'error' ? (
+                <button onClick={handleUpdateNow}
+                  style={{ padding:'5px 14px', borderRadius:6, border:'none', background:t.accent,
+                           color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  Update Now
+                </button>
+              ) : updateProgress.state === 'downloading' ? (
+                <span style={{ fontSize:12, color:t.muted }}>
+                  Downloading... {updateProgress.pct}%
+                </span>
+              ) : updateProgress.state === 'launching' ? (
+                <span style={{ fontSize:12, color:t.success }}>Installing — app will restart</span>
+              ) : null}
+              {updateProgress?.state === 'error' && (
+                <span style={{ fontSize:11, color:t.danger }}>{updateProgress.error}</span>
+              )}
             </div>
           )}
           {updateInfo?.ok && !updateInfo.update_available && (
-            <span style={{ fontSize:13, color:t.success }}>✓ Up to date — v{updateInfo.current}</span>
+            <span style={{ fontSize:13, color:t.success }}>Up to date — v{updateInfo.current}</span>
           )}
           {updateInfo?.ok === false && (
-            <span style={{ fontSize:13, color:t.danger }}>✗ {updateInfo.error}</span>
+            <span style={{ fontSize:13, color:t.danger }}>{updateInfo.error}</span>
           )}
         </div>
       </div>

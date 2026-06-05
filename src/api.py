@@ -753,9 +753,10 @@ class MacroPadAPI:
             log.debug(f'_restore_encoder_led failed for enc {enc_id}: {e}')
 
     # ── Update check ──────────────────────────────────────────────────────────
-    _REPO      = 'brimgit/MacroPad-Serial-To-Macros-GUI'
-    _RAW_URL   = f'https://raw.githubusercontent.com/{_REPO}/main/version.txt'
-    _REPO_URL  = f'https://github.com/{_REPO}'
+    _REPO          = 'brimgit/MacroPad-Serial-To-Macros-GUI'
+    _RAW_URL       = f'https://raw.githubusercontent.com/{_REPO}/main/version.txt'
+    _REPO_URL      = f'https://github.com/{_REPO}'
+    _RELEASES_URL  = f'https://github.com/{_REPO}/releases'
 
     def check_for_update(self):
         """Fetch version.txt from GitHub and compare with the local version."""
@@ -777,12 +778,53 @@ class MacroPadAPI:
             return {'ok': False, 'error': str(e), 'current': local}
 
         return {
-            'ok':              True,
-            'current':         local,
-            'latest':          remote,
+            'ok':               True,
+            'current':          local,
+            'latest':           remote,
             'update_available': self._version_gt(remote, local),
-            'repo_url':        self._REPO_URL,
+            'repo_url':         self._REPO_URL,
+            'releases_url':     self._RELEASES_URL,
         }
+
+    def install_update(self, version: str):
+        """Download the installer for *version* from GitHub Releases and run it."""
+        url  = (f'https://github.com/{self._REPO}/releases/download/'
+                f'v{version}/MacroPad_Setup_v{version}.exe')
+        import tempfile
+        dest = os.path.join(tempfile.gettempdir(), f'MacroPad_Setup_v{version}.exe')
+
+        def _run():
+            try:
+                self._push('update_progress', {'state': 'downloading', 'pct': 0})
+                req = urllib.request.Request(
+                    url, headers={'User-Agent': 'MacroPad-updater/1.0'})
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    total = int(r.headers.get('Content-Length') or 0)
+                    done  = 0
+                    with open(dest, 'wb') as f:
+                        while True:
+                            chunk = r.read(32768)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            done += len(chunk)
+                            if total:
+                                self._push('update_progress', {
+                                    'state': 'downloading',
+                                    'pct': int(done * 100 / total),
+                                })
+                self._push('update_progress', {'state': 'launching'})
+                import subprocess
+                subprocess.Popen([dest])
+                time.sleep(1)
+                if self._window:
+                    self._window.destroy()
+            except Exception as e:
+                log.warning(f'install_update failed: {e}')
+                self._push('update_progress', {'state': 'error', 'error': str(e)})
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {'ok': True}
 
     def _local_version(self) -> str:
         import sys

@@ -31,7 +31,7 @@ const LIGHT_THEME = {
 
 const DEFAULT_ENCODERS = Array.from({ length: 4 }, () => ({
   app: '', mode: 'default', color: [6, 182, 212], color2: [255, 100, 0],
-  blend_start: 0, effect: 'Off', rgb_passthrough: false,
+  blend_start: 0, effect: 'Off',
 }))
 
 export default function App() {
