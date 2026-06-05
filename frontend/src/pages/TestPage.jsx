@@ -55,7 +55,7 @@ export default function TestPage({ t }) {
                 transition: 'background 0.15s, border-color 0.15s',
               }}
             >
-              <span style={{ fontSize: 20, fontWeight: 700, color: isActive ? '#fff' : t.dim }}>{k}</span>
+              <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: isActive ? '#fff' : t.dim }}>{k}</span>
             </div>
           )
         })}

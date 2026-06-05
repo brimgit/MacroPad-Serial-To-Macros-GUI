@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { MacroModal, macroLabel } from '../components/MacroModal'
+import { toast } from '../utils/toast'
 
 const LED_MODES = ['default', 'solid', 'fade']
 const EFFECTS   = ['Off', 'Breathe', 'Wave', 'Rainbow', 'Chase', 'Color Cycle', 'Sparkle']
@@ -193,12 +194,17 @@ function BtnMacroRow({ t, label, macro, onClick }) {
 }
 
 // ── encoder card ──────────────────────────────────────────────────────────────
-function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flashMuted, macros, api, onRefresh, onChange }) {
+const EncoderCard = forwardRef(function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flashMuted, macros, api, onRefresh, onChange, onDirtyChange }, ref) {
   const [local,   setLocal]   = useState({...encoder})
   const [dirty,   setDirty]   = useState(false)
   const [editBtn, setEditBtn] = useState(null)  // 'press' | 'hold' | null
 
   useEffect(() => { setLocal({...encoder}); setDirty(false) }, [encoder])
+  useEffect(() => { onDirtyChange?.(idx, dirty) }, [dirty]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useImperativeHandle(ref, () => ({
+    apply() { if (dirty) { onChange(idx, local); setDirty(false) } },
+  }), [dirty, local, idx, onChange])
   const upd = (k,v) => { setLocal(p=>({...p,[k]:v})); setDirty(true) }
 
   const btnKey    = BTN_KEYS[idx]
@@ -214,6 +220,7 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
     if (hold)  await api?.set_macro(`KP:${btnKey}:HOLD`, hold.type,  hold.action, hold.hold_ms ?? 500)
     else       await api?.delete_macro(`KP:${btnKey}:HOLD`)
     onRefresh?.()
+    toast(`Encoder ${idx + 1} button saved`, 'success')
   }
 
   const fld = {
@@ -224,12 +231,17 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
   const rowSt = { marginBottom:12 }
   const lblSt = { fontSize:11, fontWeight:600, color:t.muted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5, display:'block' }
 
+  const [cr, cg, cb] = local.color || [6, 182, 212]
+  const glowAlpha    = dirty ? 0.22 : muted ? 0 : 0.10
+  const cardGlow     = `0 0 20px rgba(${cr},${cg},${cb},${glowAlpha}), 0 2px 8px rgba(0,0,0,0.3)`
+
   return (
     <div style={{
       background:t.card,
       border:`1px solid ${dirty?t.accent:muted?'#ef444466':t.border}`,
       borderRadius:10, padding:'16px 16px 14px',
-      transition:'border-color 0.2s',
+      boxShadow: cardGlow,
+      transition:'border-color 0.2s, box-shadow 0.3s',
     }}>
       <div style={{ fontSize:13, fontWeight:700, marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         Encoder {idx+1}
@@ -335,13 +347,15 @@ function EncoderCard({ t, idx, encoder, audioApps, usedApps, volume, muted, flas
       )}
     </div>
   )
-}
+})
 
 // ── page ──────────────────────────────────────────────────────────────────────
 const DEFAULT_ENC = {app:'',mode:'default',color:[6,182,212],color2:[255,100,0],blend_start:0,effect:'Off'}
 
 export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, macros, api, onEncoderChange, onEncodersReset, onRefresh }) {
   const [audioApps, setAudioApps] = useState([])
+  const [dirtySet,  setDirtySet]  = useState(() => new Set())
+  const cardRefs = useRef([{current:null},{current:null},{current:null},{current:null}])
 
   useEffect(() => {
     api?.get_audio_apps().then(apps => {
@@ -356,23 +370,50 @@ export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, 
   const handleChange = useCallback(async (idx, config) => {
     const r = await api?.set_encoder(idx, config)
     if (r?.encoders) {
-      // API resolved a conflict — refresh all encoder states at once
       onEncodersReset?.(r.encoders)
     } else {
       onEncoderChange?.(idx, config)
     }
+    toast(`Encoder ${idx + 1} saved`, 'success')
   }, [api, onEncoderChange, onEncodersReset])
+
+  const handleDirtyChange = useCallback((idx, isDirty) => {
+    setDirtySet(prev => {
+      const next = new Set(prev)
+      isDirty ? next.add(idx) : next.delete(idx)
+      return next
+    })
+  }, [])
+
+  const handleApplyAll = useCallback(() => {
+    cardRefs.current.forEach(r => r.current?.apply())
+  }, [])
+
+  const anyDirty = dirtySet.size > 0
 
   return (
     <div>
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:20, fontWeight:700, marginBottom:4 }}>Encoders</h1>
-        <p style={{ fontSize:13, color:t.muted }}>Configure LED, volume app, and button macros per encoder.</p>
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:24 }}>
+        <div>
+          <h1 style={{ fontSize:20, fontWeight:700, marginBottom:4 }}>Encoders</h1>
+          <p style={{ fontSize:13, color:t.muted }}>Configure LED, volume app, and button macros per encoder.</p>
+        </div>
+        <button onClick={handleApplyAll} disabled={!anyDirty}
+          style={{
+            padding:'7px 16px', borderRadius:6, border:'none', flexShrink:0,
+            background: anyDirty ? t.accent : t.border,
+            color: anyDirty ? '#fff' : t.dim,
+            fontSize:12, fontWeight:600,
+            cursor: anyDirty ? 'pointer' : 'not-allowed',
+            transition:'background 0.15s',
+          }}>
+          Apply All Changes{anyDirty ? ` (${dirtySet.size})` : ''}
+        </button>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16, maxWidth:680 }}>
         {Array.from({length:4},(_,i)=>(
           <EncoderCard
-            key={i} t={t} idx={i}
+            key={i} ref={cardRefs.current[i]} t={t} idx={i}
             encoder={encoders?.[i]??DEFAULT_ENC}
             audioApps={audioApps}
             usedApps={usedApps}
@@ -383,6 +424,7 @@ export default function EncodersPage({ t, encoders, volumes, muted, flashMuted, 
             api={api}
             onRefresh={onRefresh}
             onChange={handleChange}
+            onDirtyChange={handleDirtyChange}
           />
         ))}
       </div>

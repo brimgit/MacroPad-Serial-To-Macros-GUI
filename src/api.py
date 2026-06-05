@@ -198,15 +198,15 @@ class MacroPadAPI:
         brightness_pct = s.get('brightness_pct', 10)
         self._serial_send(f'BRIGHT:{round(brightness_pct * 255 / 100)}')
         time.sleep(0.05)
+        active   = profile_manager.get_active(self._profile_data)
+        encoders = active.get('encoders', self._default_encoders())
+
         enc_timeout = s.get('enc_led_timeout', 2)
         self._serial_send(f'ENC_TIMEOUT:{enc_timeout}')
         time.sleep(0.05)
         effect_speed = s.get('effect_speed_ms', 10)
         self._serial_send(f'EFFECT_SPEED:{effect_speed}')
         time.sleep(0.05)
-
-        active   = profile_manager.get_active(self._profile_data)
-        encoders = active.get('encoders', self._default_encoders())
 
         from volume_manager import MASTER_APP, MIC_APP
         for enc_id, enc in enumerate(encoders):
@@ -230,8 +230,8 @@ class MacroPadAPI:
             else:
                 self._serial_send(_color_cmd(enc_id, enc))
                 time.sleep(0.06)
-                pct = 0
                 if vm and app:
+                    pct = 0
                     try:
                         if app == MASTER_APP:
                             pct = vm.get_master_volume() or 0
@@ -241,7 +241,7 @@ class MacroPadAPI:
                             pct = vm.get_volume(app) or 0
                     except Exception as e:
                         log.debug(f'Could not read volume for {app}: {e}')
-                self._serial_send(f'{n}:{pct}')
+                    self._serial_send(f'{n}:{pct}')
             time.sleep(0.06)
             self._serial_send(_effect_cmd(enc_id, enc))
             time.sleep(0.06)
@@ -460,7 +460,7 @@ class MacroPadAPI:
 
         # Push updated color/effect to device
         enc = enc_list[idx]
-        self._serial_send(_color_cmd(idx, enc))
+        self._restore_encoder_led(idx)
         self._serial_send(_effect_cmd(idx, enc))
 
         return {'ok': True, 'encoders': [dict(e) for e in enc_list]}
@@ -725,13 +725,18 @@ class MacroPadAPI:
                 self._restore_encoder_led(enc_id)
 
     def _restore_encoder_led(self, enc_id: int):
-        """Re-send the configured color + current volume for an encoder."""
+        """Re-send the configured color + current volume (or mute red) for an encoder."""
         try:
             active   = profile_manager.get_active(self._profile_data)
             encoders = active.get('encoders', [])
             if enc_id >= len(encoders):
                 return
             enc = encoders[enc_id]
+            n   = enc_id + 1
+            if self._enc_muted.get(enc_id, False):
+                self._serial_send(f'{n}:color(200,0,0)')
+                self._serial_send(f'{n}:100')
+                return
             self._serial_send(_color_cmd(enc_id, enc))
             app = enc.get('app', '')
             if app and self._serial_mgr:
@@ -743,7 +748,7 @@ class MacroPadAPI:
                     vol = vm.get_mic_volume() or 0
                 else:
                     vol = vm.get_volume(app) or 0
-                self._serial_send(f'{enc_id + 1}:{vol}')
+                self._serial_send(f'{n}:{vol}')
         except Exception as e:
             log.debug(f'_restore_encoder_led failed for enc {enc_id}: {e}')
 
@@ -780,7 +785,11 @@ class MacroPadAPI:
         }
 
     def _local_version(self) -> str:
-        path = os.path.join(os.path.dirname(__file__), '..', 'version.txt')
+        import sys
+        if getattr(sys, 'frozen', False):
+            path = os.path.join(sys._MEIPASS, 'version.txt')
+        else:
+            path = os.path.join(os.path.dirname(__file__), '..', 'version.txt')
         with open(os.path.normpath(path), 'r') as f:
             return f.read().strip()
 

@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Sidebar      from './components/Sidebar'
-import TitleBar     from './components/TitleBar'
-import MacrosPage   from './pages/MacrosPage'
-import EncodersPage from './pages/EncodersPage'
-import SettingsPage from './pages/SettingsPage'
-import UploadPage   from './pages/UploadPage'
-import TestPage     from './pages/TestPage'
+import Sidebar         from './components/Sidebar'
+import TitleBar        from './components/TitleBar'
+import ToastContainer  from './components/ToastContainer'
+import MacrosPage      from './pages/MacrosPage'
+import EncodersPage    from './pages/EncodersPage'
+import SettingsPage    from './pages/SettingsPage'
+import UploadPage      from './pages/UploadPage'
+import TestPage        from './pages/TestPage'
+import { toast }       from './utils/toast'
 
 // Receive events pushed from Python via evaluate_js
 window.__macropadEvent = (event, payload) => {
@@ -29,7 +31,7 @@ const LIGHT_THEME = {
 
 const DEFAULT_ENCODERS = Array.from({ length: 4 }, () => ({
   app: '', mode: 'default', color: [6, 182, 212], color2: [255, 100, 0],
-  blend_start: 0, effect: 'Off',
+  blend_start: 0, effect: 'Off', rgb_passthrough: false,
 }))
 
 export default function App() {
@@ -75,7 +77,12 @@ export default function App() {
 
   // Live events from Python
   useEffect(() => {
-    const onConn = (e) => { setConnected(e.detail.connected); setPort(e.detail.port ?? '') }
+    const onConn = (e) => {
+      setConnected(e.detail.connected)
+      setPort(e.detail.port ?? '')
+      if (e.detail.connected) toast(`Connected to ${e.detail.port}`, 'success')
+      else toast('Device disconnected', 'info')
+    }
     const onTurn = (e) => {
       const { id, pct, muted } = e.detail
       if (muted) {
@@ -90,7 +97,7 @@ export default function App() {
     }
     const onProfileSwitch = (e) => {
       const { active, macros: m, encoders: enc } = e.detail
-      if (active)  setActive(active)
+      if (active)  { setActive(active); toast(`Profile: ${active}`, 'info') }
       if (m)       setMacros(m)
       if (enc)     setEncoders(enc)
     }
@@ -137,8 +144,10 @@ export default function App() {
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100vh',
       background: t.bg, color: t.text,
-      fontFamily: "'Segoe UI',system-ui,sans-serif", fontSize: 13,
+      fontFamily: "'Segoe UI Variable','Segoe UI',system-ui,sans-serif", fontSize: 13,
       overflow: 'hidden',
+      borderRadius: 10,
+      border: `1px solid ${t.border}`,
     }}>
       <TitleBar t={t} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -151,28 +160,31 @@ export default function App() {
           setActive(name)
           if (r?.macros)   setMacros(r.macros)
           if (r?.encoders) setEncoders(r.encoders)
+          toast(`Profile: ${name}`, 'info')
         }}
         onNew={async (name) => {
           await pyapi()?.new_profile(name)
           const p = await pyapi()?.get_profiles()
           if (p) { setProfiles(p.names); setActive(p.active) }
+          toast(`Profile "${name}" created`, 'success')
         }}
         onDelete={async (name) => {
           await pyapi()?.delete_profile(name)
           const p = await pyapi()?.get_profiles()
           if (p) { setProfiles(p.names); setActive(p.active) }
+          toast(`Profile "${name}" deleted`, 'info')
         }}
         onRename={async (oldName, newName) => {
           const r = await pyapi()?.rename_profile(oldName, newName)
-          if (r?.ok) { setProfiles(r.names); setActive(r.active) }
+          if (r?.ok) { setProfiles(r.names); setActive(r.active); toast(`Renamed to "${newName}"`, 'success') }
         }}
         onDuplicate={async (name) => {
           const r = await pyapi()?.duplicate_profile(name)
-          if (r?.ok) { setProfiles(r.names) }
+          if (r?.ok) { setProfiles(r.names); toast(`"${name}" duplicated`, 'success') }
         }}
       />
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '32px 36px' }}>
+      <main key={page} className="page-fade" style={{ flex: 1, overflowY: 'auto', padding: '32px 36px' }}>
         {page === 'Macros'   && <MacrosPage   t={t} macros={macros}     api={pyapi()} onRefresh={refreshMacros} />}
         {page === 'Encoders' && <EncodersPage t={t} encoders={encoders} volumes={encVolumes} muted={encMuted} flashMuted={encFlash} macros={macros} api={pyapi()} onEncoderChange={handleEncoderChange} onEncodersReset={handleEncodersReset} onRefresh={refreshMacros} />}
         {page === 'Settings' && <SettingsPage t={t} settings={settings} api={pyapi()} connected={connected} port={port} onSave={setSettings} />}
@@ -180,6 +192,7 @@ export default function App() {
         {page === 'Test'     && <TestPage     t={t} />}
       </main>
       </div>
+      <ToastContainer />
     </div>
   )
 }

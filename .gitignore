@@ -7,13 +7,14 @@ __pycache__/
 # User data
 Data/macros.json
 Data/settings_serial.json
-src/Data/settings_serial.json
+src/Data/
 
 # Build artifacts
 build/
 dist/
-MacroPad.spec
-*.spec
+dist_build/
+build_tmp/
+installer/drivers/
 
 # Frontend build output and dependencies
 frontend/node_modules/

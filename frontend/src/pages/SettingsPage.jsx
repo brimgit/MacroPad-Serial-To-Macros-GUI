@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../utils/toast'
 
 export default function SettingsPage({ t, settings, api, connected, port, onSave }) {
   const [ports,          setPorts]          = useState([])
@@ -70,9 +71,8 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
     const s = { ...settings, port: selPort, baud_rate: baud, brightness_pct: brightness, enc_led_timeout: ledTimeout, effect_speed_ms: effectSpeed }
     await api?.save_settings(s)
     onSave?.(s)
-    setStatus('Settings saved')
     setSaving(false)
-    setTimeout(() => setStatus(''), 2000)
+    toast('Settings saved', 'success')
   }
 
   const handleExport = async () => {
@@ -95,12 +95,10 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
       try {
         const data = JSON.parse(text)
         const r = await api?.import_profile?.(data)
-        if (r?.ok) setStatus(`Imported "${r.name}"`)
-        else setStatus('Import failed')
-        setTimeout(() => setStatus(''), 3000)
+        if (r?.ok) toast(`Imported "${r.name}"`, 'success')
+        else toast('Import failed', 'error')
       } catch {
-        setStatus('Invalid JSON file')
-        setTimeout(() => setStatus(''), 3000)
+        toast('Invalid JSON file', 'error')
       }
     }
     input.click()
@@ -241,7 +239,7 @@ export default function SettingsPage({ t, settings, api, connected, port, onSave
       {/* Startup with Windows */}
       <div style={section}>
         <div style={sectionTitle}>System</div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
           <div>
             <div style={{ fontSize:13, color:t.text, marginBottom:2 }}>Start with Windows</div>
             <div style={{ fontSize:12, color:t.muted }}>Launch MacroPad automatically on login</div>

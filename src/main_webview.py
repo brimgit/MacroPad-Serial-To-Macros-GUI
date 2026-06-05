@@ -14,11 +14,14 @@ from api import MacroPadAPI
 def main():
     api = MacroPadAPI()
 
-    # In dev: point to Vite dev server. In production: point to built dist.
     dev_mode = '--dev' in sys.argv
-    url = 'http://localhost:5173' if dev_mode else os.path.join(
-        os.path.dirname(__file__), '..', 'frontend', 'dist', 'index.html'
-    )
+    if getattr(sys, 'frozen', False):
+        # PyInstaller bundle — frontend/dist is extracted alongside our resources
+        url = os.path.join(sys._MEIPASS, 'frontend', 'dist', 'index.html')
+    elif dev_mode:
+        url = 'http://localhost:5173'
+    else:
+        url = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist', 'index.html')
 
     window = webview.create_window(
         title     = 'MacroPad',
@@ -31,7 +34,9 @@ def main():
     )
 
     api.set_window(window)
-    webview.start(debug=False)
+    # Force Edge (WebView2) backend when running as a bundled exe — PyQt5 is not bundled
+    gui = 'edgechromium' if getattr(sys, 'frozen', False) else None
+    webview.start(debug=False, gui=gui)
 
 
 if __name__ == '__main__':
